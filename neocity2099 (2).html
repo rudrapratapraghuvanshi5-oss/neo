@@ -1,0 +1,3522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NEOCITY 2099 — Living Megacity</title>
+<style>
+  :root{
+    --glass-bg: rgba(10,14,24,0.55);
+    --glass-border: rgba(120,220,255,0.18);
+    --accent-cyan: #4ef2ff;
+    --accent-magenta: #ff3ec8;
+    --accent-amber: #ffb545;
+    --text-dim: rgba(220,240,255,0.55);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:#000; font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    -webkit-user-select:none; user-select:none; touch-action:none;
+  }
+  #stage{position:fixed; inset:0; width:100%; height:100%; display:block; cursor:grab;}
+  #stage.dragging{cursor:grabbing;}
+
+  .glass{
+    background:var(--glass-bg);
+    backdrop-filter:blur(14px) saturate(140%);
+    -webkit-backdrop-filter:blur(14px) saturate(140%);
+    border:1px solid var(--glass-border);
+    border-radius:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  #hud-top{
+    position:fixed; top:14px; left:14px; right:14px;
+    display:flex; justify-content:space-between; align-items:flex-start;
+    pointer-events:none; z-index:20;
+  }
+  #hud-top > *{pointer-events:auto;}
+
+  #titlecard{ padding:10px 18px; display:flex; flex-direction:column; gap:2px; }
+  #titlecard .t1{font-size:15px; font-weight:700; letter-spacing:3px; color:var(--accent-cyan); text-shadow:0 0 12px rgba(78,242,255,0.6);}
+  #titlecard .t2{font-size:10px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase;}
+
+  #stats-panel{
+    padding:10px 16px; min-width:190px; font-size:11px; color:var(--text-dim);
+    display:grid; grid-template-columns:auto 1fr; gap:3px 10px;
+  }
+  #stats-panel .label{color:var(--text-dim); opacity:0.7;}
+  #stats-panel .val{color:#eaf7ff; text-align:right; font-variant-numeric:tabular-nums;}
+  #stats-panel .val.warn{color:var(--accent-amber);}
+  #stats-panel .val.alert{color:var(--accent-magenta);}
+
+  #hud-bottom{
+    position:fixed; bottom:14px; left:14px; right:14px;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    pointer-events:none; z-index:20; gap:12px;
+  }
+  #hud-bottom > *{pointer-events:auto;}
+
+  #control-dock{ display:flex; align-items:center; gap:6px; padding:8px; }
+  .dock-btn{
+    width:36px; height:36px; border-radius:9px; border:1px solid rgba(120,220,255,0.15);
+    background:rgba(255,255,255,0.04); color:#cdeaff; display:flex; align-items:center; justify-content:center;
+    font-size:15px; cursor:pointer; transition:background .15s, transform .1s; position:relative;
+  }
+  .dock-btn:hover{background:rgba(78,242,255,0.15);}
+  .dock-btn:active{transform:scale(0.9);}
+  .dock-sep{width:1px; height:22px; background:rgba(255,255,255,0.1); margin:0 4px;}
+
+  #weather-panel{ padding:10px 14px; min-width:170px; }
+  #weather-panel .wp-row{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim); margin-bottom:6px;}
+  #weather-panel .wp-title{font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); margin-bottom:8px; opacity:0.85;}
+  select#weatherSelect, select#speedSelect{
+    background:rgba(255,255,255,0.06); color:#eaf7ff; border:1px solid rgba(120,220,255,0.2);
+    border-radius:6px; font-size:11px; padding:4px 6px; outline:none; width:100%;
+  }
+
+  #event-toast{
+    position:fixed; top:70px; left:50%; transform:translateX(-50%) translateY(-20px);
+    padding:10px 22px; font-size:12px; letter-spacing:1.5px; text-transform:uppercase;
+    color:#fff; opacity:0; transition:opacity .4s, transform .4s; pointer-events:none; z-index:30;
+    border-left:3px solid var(--accent-magenta); white-space:nowrap;
+  }
+  #event-toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  #settings-panel{
+    position:fixed; top:70px; right:14px; width:230px; padding:14px;
+    display:none; flex-direction:column; gap:10px; z-index:25;
+  }
+  #settings-panel.open{display:flex;}
+  #settings-panel .sp-title{font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); opacity:0.85;}
+  .toggle-row{display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-dim);}
+  .toggle{ width:34px; height:18px; border-radius:10px; background:rgba(255,255,255,0.12); position:relative; cursor:pointer; transition:background .2s; }
+  .toggle.on{background:var(--accent-cyan);}
+  .toggle::after{content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,0.4);}
+  .toggle.on::after{left:18px;}
+  .slider-row{display:flex; align-items:center; gap:8px; font-size:10px; color:var(--text-dim);}
+  input[type=range]{-webkit-appearance:none; flex:1; height:3px; background:rgba(255,255,255,0.15); border-radius:2px; outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:11px; height:11px; border-radius:50%; background:var(--accent-cyan); box-shadow:0 0 6px var(--accent-cyan); cursor:pointer;}
+
+  /* ===================== PRODUCTIVITY / CITY GROWTH DASHBOARD ===================== */
+  #prod-panel{
+    position:fixed; top:70px; right:14px; width:300px; max-height:calc(100vh - 100px);
+    padding:0; display:none; flex-direction:column; z-index:26; overflow:hidden;
+  }
+  #prod-panel.open{display:flex;}
+  #prod-scroll{ overflow-y:auto; overflow-x:hidden; padding:14px; display:flex; flex-direction:column; gap:12px; }
+  #prod-panel .pp-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;}
+  #prod-panel .pp-title{font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); opacity:0.9;}
+  #prod-panel .pp-close{cursor:pointer; color:var(--text-dim); font-size:14px; padding:2px 6px; opacity:0.7;}
+  #prod-panel .pp-close:hover{opacity:1;}
+
+  .pp-level-row{display:flex; align-items:baseline; justify-content:space-between;}
+  .pp-level-row .pp-lv{font-size:20px; font-weight:700; color:#eaf7ff; text-shadow:0 0 10px rgba(78,242,255,0.5);}
+  .pp-level-row .pp-lv-sub{font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-dim);}
+  .pp-xpbar-track{width:100%; height:7px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:4px; box-shadow:inset 0 0 3px rgba(0,0,0,0.5);}
+  .pp-xpbar-fill{height:100%; width:0%; border-radius:4px; background:linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta)); box-shadow:0 0 8px rgba(78,242,255,0.6); transition:width .6s cubic-bezier(.2,.9,.2,1);}
+  .pp-xp-label{font-size:9px; color:var(--text-dim); margin-top:3px; text-align:right;}
+
+  .pp-stats-grid{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; font-size:10.5px; color:var(--text-dim); padding:10px; background:rgba(255,255,255,0.03); border-radius:9px; border:1px solid rgba(120,220,255,0.08);}
+  .pp-stats-grid .k{opacity:0.7;}
+  .pp-stats-grid .v{color:#eaf7ff; text-align:right; font-variant-numeric:tabular-nums;}
+  .pp-stats-grid .v.good{color:#3dffb0;}
+  .pp-stats-grid .v.bad{color:var(--accent-magenta);}
+  .pp-next-unlock{font-size:10px; color:var(--accent-amber); text-align:center; padding:6px; background:rgba(255,181,69,0.08); border-radius:7px; border:1px solid rgba(255,181,69,0.2); letter-spacing:0.5px;}
+
+  .pp-section-title{font-size:9.5px; letter-spacing:2px; text-transform:uppercase; color:var(--accent-cyan); opacity:0.85; margin-top:2px; display:flex; justify-content:space-between; align-items:center;}
+  .pp-add-btn{width:20px; height:20px; border-radius:6px; background:rgba(78,242,255,0.15); color:var(--accent-cyan); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; line-height:1; border:1px solid rgba(78,242,255,0.25);}
+  .pp-add-btn:hover{background:rgba(78,242,255,0.28);}
+
+  .pp-input-row{display:flex; gap:6px;}
+  .pp-input-row input[type=text]{
+    flex:1; background:rgba(255,255,255,0.06); color:#eaf7ff; border:1px solid rgba(120,220,255,0.2);
+    border-radius:6px; font-size:11px; padding:6px 8px; outline:none;
+  }
+  .pp-input-row input[type=text]::placeholder{ color:rgba(220,240,255,0.35); }
+  .pp-input-row button{
+    background:rgba(78,242,255,0.18); color:var(--accent-cyan); border:1px solid rgba(78,242,255,0.3);
+    border-radius:6px; padding:0 12px; font-size:11px; cursor:pointer;
+  }
+  .pp-input-row button:hover{background:rgba(78,242,255,0.3);}
+
+  #prod-task-list{display:flex; flex-direction:column; gap:5px; max-height:150px; overflow-y:auto;}
+  .pp-task{display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:7px; border:1px solid rgba(255,255,255,0.05); font-size:11.5px; color:#eaf7ff; transition:opacity .3s, transform .3s;}
+  .pp-task.done{opacity:0.4;}
+  .pp-task .pp-check{width:15px; height:15px; border-radius:4px; border:1.5px solid rgba(120,220,255,0.4); cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:10px;}
+  .pp-task.done .pp-check{background:#3dffb0; border-color:#3dffb0; color:#04160e;}
+  .pp-task .pp-txt{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default;}
+  .pp-task.done .pp-txt{text-decoration:line-through;}
+  .pp-task .pp-del{color:rgba(255,120,150,0.55); cursor:pointer; font-size:13px; padding:0 2px; flex-shrink:0;}
+  .pp-task .pp-del:hover{color:#ff3ec8;}
+  .pp-empty{font-size:10.5px; color:var(--text-dim); opacity:0.5; text-align:center; padding:6px 0;}
+
+  #prod-timer-box{display:flex; flex-direction:column; gap:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:9px; border:1px solid rgba(120,220,255,0.08);}
+  .pp-timer-display{font-size:26px; font-weight:700; text-align:center; color:#eaf7ff; font-variant-numeric:tabular-nums; letter-spacing:1px; text-shadow:0 0 12px rgba(78,242,255,0.4);}
+  .pp-timer-label{font-size:10px; text-align:center; color:var(--text-dim); text-transform:uppercase; letter-spacing:1.5px;}
+  .pp-timer-controls{display:flex; gap:6px; justify-content:center;}
+  .pp-timer-controls button{
+    background:rgba(255,255,255,0.06); color:#cdeaff; border:1px solid rgba(120,220,255,0.18);
+    border-radius:7px; padding:6px 10px; font-size:11px; cursor:pointer; min-width:56px;
+  }
+  .pp-timer-controls button.primary{background:rgba(78,242,255,0.2); color:var(--accent-cyan); border-color:rgba(78,242,255,0.35);}
+  .pp-timer-controls button:hover{filter:brightness(1.2);}
+  .pp-timer-presets{display:flex; gap:5px; justify-content:center; flex-wrap:wrap;}
+  .pp-timer-presets span{font-size:10px; padding:3px 8px; border-radius:5px; background:rgba(255,255,255,0.05); color:var(--text-dim); cursor:pointer; border:1px solid rgba(255,255,255,0.06);}
+  .pp-timer-presets span:hover{color:#eaf7ff; background:rgba(78,242,255,0.15);}
+  .pp-timer-presets span.active{color:var(--accent-cyan); border-color:rgba(78,242,255,0.35); background:rgba(78,242,255,0.12);}
+
+  #prod-history{display:flex; flex-direction:column; gap:4px; max-height:90px; overflow-y:auto;}
+  .pp-hist-item{font-size:10px; color:var(--text-dim); display:flex; justify-content:space-between; gap:6px; padding:3px 2px; border-bottom:1px solid rgba(255,255,255,0.04);}
+  .pp-hist-item .h-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .pp-hist-item .h-xp{color:#3dffb0; flex-shrink:0;}
+
+  #prod-toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-30px) scale(0.9);
+    padding:14px 26px; display:flex; flex-direction:column; align-items:center; gap:2px;
+    opacity:0; transition:opacity .5s ease, transform .5s cubic-bezier(.2,1.4,.4,1); pointer-events:none; z-index:35;
+  }
+  #prod-toast.show{opacity:1; transform:translateX(-50%) translateY(0) scale(1);}
+  #prod-toast .pt-main{font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent-cyan); text-shadow:0 0 10px rgba(78,242,255,0.6); font-weight:700;}
+  #prod-toast .pt-sub{font-size:10px; color:var(--text-dim); letter-spacing:1px;}
+
+  #loading{
+    position:fixed; inset:0; background:#04060c; z-index:100; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:16px; transition:opacity .8s ease;
+  }
+  #loading .logo{font-size:26px; letter-spacing:6px; color:var(--accent-cyan); text-shadow:0 0 24px rgba(78,242,255,0.7); font-weight:700;}
+  #loading .sub{font-size:11px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase;}
+  #loading .bar-track{width:260px; height:3px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden;}
+  #loading .bar-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta)); box-shadow:0 0 10px var(--accent-cyan); transition:width .2s;}
+  #loading.hide{opacity:0; pointer-events:none;}
+
+  ::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="logo">NEOCITY 2099</div>
+  <div class="sub">Compiling procedural megacity…</div>
+  <div class="bar-track"><div class="bar-fill" id="loadBar"></div></div>
+</div>
+
+<canvas id="stage"></canvas>
+
+<div id="hud-top">
+  <div class="glass" id="titlecard">
+    <div class="t1">NEOCITY 2099</div>
+    <div class="t2">Living Megacity Simulation</div>
+  </div>
+  <div class="glass" id="stats-panel">
+    <span class="label">FPS</span><span class="val" id="statFps">60</span>
+    <span class="label">Population</span><span class="val" id="statPop">—</span>
+    <span class="label">Traffic</span><span class="val" id="statTraffic">Normal</span>
+    <span class="label">Weather</span><span class="val" id="statWeather">Clear</span>
+    <span class="label">Time</span><span class="val" id="statTime">00:00</span>
+    <span class="label">Entities</span><span class="val" id="statEntities">0</span>
+  </div>
+</div>
+
+<div id="event-toast"></div>
+
+<div id="settings-panel" class="glass">
+  <div class="sp-title">Settings</div>
+  <div class="toggle-row">Sound <div class="toggle on" id="toggleSound"></div></div>
+  <div class="toggle-row">Bloom / Glow <div class="toggle on" id="toggleBloom"></div></div>
+  <div class="toggle-row">Rain Splashes <div class="toggle on" id="toggleSplash"></div></div>
+  <div class="toggle-row">Auto Weather <div class="toggle on" id="toggleAutoWeather"></div></div>
+  <div class="toggle-row">Auto Events <div class="toggle on" id="toggleAutoEvents"></div></div>
+  <div class="sp-title" style="margin-top:4px;">Performance</div>
+  <div class="slider-row">Density <input type="range" id="densitySlider" min="0.3" max="1.2" step="0.05" value="1"></div>
+</div>
+
+<div id="prod-panel" class="glass">
+  <div id="prod-scroll">
+    <div class="pp-head">
+      <div class="pp-title">City Progress</div>
+      <div class="pp-close" id="prodClose">✕</div>
+    </div>
+
+    <div>
+      <div class="pp-level-row">
+        <div><span class="pp-lv" id="ppLevel">1</span> <span class="pp-lv-sub">City Level</span></div>
+        <div class="pp-lv-sub" id="ppXpText">0 / 100 XP</div>
+      </div>
+      <div class="pp-xpbar-track"><div class="pp-xpbar-fill" id="ppXpFill"></div></div>
+    </div>
+
+    <div class="pp-next-unlock" id="ppNextUnlock">Next Unlock: —</div>
+
+    <div class="pp-stats-grid">
+      <span class="k">Productivity</span><span class="v" id="ppProd">0%</span>
+      <span class="k">Streak</span><span class="v" id="ppStreak">0 days</span>
+      <span class="k">Focus Today</span><span class="v" id="ppFocusToday">0m</span>
+      <span class="k">Buildings Thriving</span><span class="v good" id="ppBuildingsUp">0</span>
+      <span class="k">Abandoned</span><span class="v bad" id="ppBuildingsDown">0</span>
+      <span class="k">City Vitality</span><span class="v" id="ppVitality">100%</span>
+    </div>
+
+    <div>
+      <div class="pp-section-title">Tasks <span class="pp-add-btn" id="ppTaskAddToggle">＋</span></div>
+      <div class="pp-input-row" id="ppTaskInputRow" style="display:none; margin-top:6px;">
+        <input type="text" id="ppTaskInput" placeholder="New task…" maxlength="80">
+        <button id="ppTaskAddBtn">Add</button>
+      </div>
+      <div id="prod-task-list" style="margin-top:6px;"></div>
+    </div>
+
+    <div>
+      <div class="pp-section-title">Focus Session</div>
+      <div id="prod-timer-box" style="margin-top:6px;">
+        <div class="pp-timer-presets" id="ppTimerPresets">
+          <span data-min="15">15m</span><span data-min="25" class="active">25m</span><span data-min="45">45m</span><span data-min="60">60m</span>
+        </div>
+        <div class="pp-timer-display" id="ppTimerDisplay">25:00</div>
+        <div class="pp-timer-label" id="ppTimerLabel">Ready to focus</div>
+        <div class="pp-timer-controls">
+          <button class="primary" id="ppTimerStart">Start</button>
+          <button id="ppTimerPause" style="display:none;">Pause</button>
+          <button id="ppTimerResume" style="display:none;">Resume</button>
+          <button id="ppTimerReset" style="display:none;">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="pp-section-title">Completion History</div>
+      <div id="prod-history" style="margin-top:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="prod-toast">
+  <div class="pt-main" id="ptMain">+15 XP</div>
+  <div class="pt-sub" id="ptSub">Task Completed</div>
+</div>
+
+<div id="hud-bottom">
+  <div class="glass" id="control-dock">
+    <div class="dock-btn" id="btnZoomIn" title="Zoom In">＋</div>
+    <div class="dock-btn" id="btnZoomOut" title="Zoom Out">－</div>
+    <div class="dock-sep"></div>
+    <div class="dock-btn" id="btnPause" title="Pause/Play">⏸</div>
+    <div class="dock-btn" id="btnSpeed" title="Time Speed">1×</div>
+    <div class="dock-sep"></div>
+    <div class="dock-btn" id="btnEvent" title="Trigger Random Event">⚡</div>
+    <div class="dock-btn" id="btnRecenter" title="Recenter">◎</div>
+    <div class="dock-sep"></div>
+    <div class="dock-btn" id="btnProductivity" title="Productivity">◆</div>
+    <div class="dock-btn" id="btnSettings" title="Settings">⚙</div>
+  </div>
+
+  <div class="glass" id="weather-panel">
+    <div class="wp-title">Sky Control</div>
+    <div class="wp-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+      <select id="weatherSelect">
+        <option value="auto">Auto Weather</option>
+        <option value="clear">Clear</option>
+        <option value="rain">Rain</option>
+        <option value="heavyrain">Heavy Rain</option>
+        <option value="storm">Thunderstorm</option>
+        <option value="fog">Fog</option>
+        <option value="dust">Dust Storm</option>
+      </select>
+    </div>
+    <div class="wp-row" style="flex-direction:column; align-items:stretch; gap:4px; margin-top:6px;">
+      <select id="speedSelect">
+        <option value="0">Time: Auto Cycle</option>
+        <option value="1">Time: Morning</option>
+        <option value="2">Time: Afternoon</option>
+        <option value="3">Time: Sunset</option>
+        <option value="4">Time: Night</option>
+        <option value="5">Time: Midnight</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =========================================================================================
+   NEOCITY 2099 — SINGLE FILE PROCEDURAL CYBERPUNK MEGACITY SIMULATION
+   Pure Canvas2D + Web Audio. No external assets. Isometric-projected procedural city.
+   ========================================================================================= */
+
+const TAU = Math.PI * 2;
+
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function invLerp(a,b,v){ return (v-a)/(b-a); }
+function smoothstep(a,b,v){ const t = clamp(invLerp(a,b,v),0,1); return t*t*(3-2*t); }
+function randRange(rng,a,b){ return a + rng()*(b-a); }
+function randInt(rng,a,b){ return Math.floor(randRange(rng,a,b+1)); }
+function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+
+const Easing = {
+  linear: t=>t,
+  quadInOut: t=> t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2,
+  cubicInOut: t=> t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2,
+  cubicOut: t=> 1-Math.pow(1-t,3),
+  expoOut: t=> t===1?1:1-Math.pow(2,-10*t),
+  sineInOut: t=> -(Math.cos(Math.PI*t)-1)/2,
+  backOut: t=>{ const c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); },
+  elasticOut: t=>{ const c4=(2*Math.PI)/3; return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1; }
+};
+
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a>>>15), 1 | a);
+    t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t;
+    return ((t ^ (t>>>14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeNoise1D(rng){
+  const table = new Array(256);
+  for(let i=0;i<256;i++) table[i] = rng();
+  return function(x){
+    const xi = Math.floor(x) & 255;
+    const xf = x - Math.floor(x);
+    const a = table[xi], b = table[(xi+1)&255];
+    const t = xf*xf*(3-2*xf);
+    return lerp(a,b,t);
+  };
+}
+
+function hslStr(h,s,l,a){ a = a===undefined?1:a; return `hsla(${h.toFixed(1)},${s}%,${l}%,${a})`; }
+
+const ISO = {
+  tileW: 46,
+  tileH: 23,
+  project(x,y,z){
+    return { sx: (x - y) * ISO.tileW, sy: (x + y) * ISO.tileH - z };
+  }
+};
+
+class Pool{
+  constructor(factory, reset){
+    this.factory = factory;
+    this.reset = reset;
+    this.free = [];
+    this.active = [];
+  }
+  spawn(){
+    let obj = this.free.pop();
+    if(!obj) obj = this.factory();
+    this.reset(obj);
+    this.active.push(obj);
+    return obj;
+  }
+  release(obj){
+    const idx = this.active.indexOf(obj);
+    if(idx>=0){ this.active.splice(idx,1); this.free.push(obj); }
+  }
+  update(dt, updateFn){
+    for(let i=this.active.length-1;i>=0;i--){
+      const obj = this.active[i];
+      const alive = updateFn(obj, dt);
+      if(!alive){ this.active.splice(i,1); this.free.push(obj); }
+    }
+  }
+  clear(){ while(this.active.length){ this.free.push(this.active.pop()); } }
+}
+
+/* ============================== AUDIO ENGINE ============================== */
+class AudioEngine{
+  constructor(){
+    this.ctx = null;
+    this.enabled = true;
+    this.started = false;
+    this.master = null;
+    this.beds = {};
+  }
+  ensureCtx(){
+    if(this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.5;
+    this.master.connect(this.ctx.destination);
+    this._buildBeds();
+  }
+  start(){
+    this.ensureCtx();
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+    this.started = true;
+  }
+  setEnabled(v){
+    this.enabled = v;
+    if(this.master) this.master.gain.setTargetAtTime(v?0.5:0, this.ctx.currentTime, 0.2);
+  }
+  _makeNoiseBuffer(seconds){
+    const ctx = this.ctx;
+    const buf = ctx.createBuffer(1, seconds*ctx.sampleRate, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+    return buf;
+  }
+  _buildBeds(){
+    const ctx = this.ctx;
+    // Rain / traffic hum via filtered looping noise
+    const noiseBuf = this._makeNoiseBuffer(3);
+
+    // City ambience hum (low-passed noise loop)
+    const cityNoise = ctx.createBufferSource();
+    cityNoise.buffer = noiseBuf; cityNoise.loop = true;
+    const cityFilter = ctx.createBiquadFilter();
+    cityFilter.type='lowpass'; cityFilter.frequency.value=280;
+    const cityGain = ctx.createGain(); cityGain.gain.value=0.05;
+    cityNoise.connect(cityFilter).connect(cityGain).connect(this.master);
+    cityNoise.start();
+
+    // Traffic hum (band-passed, modulated slightly)
+    const trafficNoise = ctx.createBufferSource();
+    trafficNoise.buffer = noiseBuf; trafficNoise.loop = true;
+    const trafficFilter = ctx.createBiquadFilter();
+    trafficFilter.type='bandpass'; trafficFilter.frequency.value=180; trafficFilter.Q.value=0.6;
+    const trafficGain = ctx.createGain(); trafficGain.gain.value=0.05;
+    trafficNoise.connect(trafficFilter).connect(trafficGain).connect(this.master);
+    trafficNoise.start();
+
+    // Rain bed (hi-passed noise), gain controlled by weather
+    const rainNoise = ctx.createBufferSource();
+    rainNoise.buffer = noiseBuf; rainNoise.loop = true;
+    const rainFilter = ctx.createBiquadFilter();
+    rainFilter.type='highpass'; rainFilter.frequency.value=1800;
+    const rainGain = ctx.createGain(); rainGain.gain.value=0.0;
+    rainNoise.connect(rainFilter).connect(rainGain).connect(this.master);
+    rainNoise.start();
+
+    // Wind bed
+    const windNoise = ctx.createBufferSource();
+    windNoise.buffer = noiseBuf; windNoise.loop = true;
+    const windFilter = ctx.createBiquadFilter();
+    windFilter.type='bandpass'; windFilter.frequency.value=600; windFilter.Q.value=0.4;
+    const windGain = ctx.createGain(); windGain.gain.value=0.0;
+    windNoise.connect(windFilter).connect(windGain).connect(this.master);
+    windNoise.start();
+
+    this.beds = { cityGain, trafficGain, rainGain, rainFilter, windGain, windFilter };
+  }
+  setRainLevel(level){ // 0..1
+    if(!this.ctx) return;
+    this.beds.rainGain.gain.setTargetAtTime(level*0.18, this.ctx.currentTime, 0.6);
+    this.beds.rainFilter.frequency.setTargetAtTime(1500+level*1200, this.ctx.currentTime, 0.6);
+  }
+  setWindLevel(level){
+    if(!this.ctx) return;
+    this.beds.windGain.gain.setTargetAtTime(level*0.06, this.ctx.currentTime, 0.6);
+  }
+  setTrafficLevel(level){
+    if(!this.ctx) return;
+    this.beds.trafficGain.gain.setTargetAtTime(0.02+level*0.06, this.ctx.currentTime, 0.8);
+  }
+  thunder(){
+    if(!this.ctx || !this.enabled) return;
+    const ctx = this.ctx;
+    const buf = this._makeNoiseBuffer(1.6);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const filter = ctx.createBiquadFilter(); filter.type='lowpass';
+    filter.frequency.setValueAtTime(700, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(80, ctx.currentTime+1.4);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime+0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+1.6);
+    src.connect(filter).connect(gain).connect(this.master);
+    src.start(); src.stop(ctx.currentTime+1.7);
+  }
+  siren(duration=2.2){
+    if(!this.ctx || !this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator(); osc.type='sine';
+    const gain = ctx.createGain(); gain.gain.value=0.12;
+    osc.connect(gain).connect(this.master);
+    const now = ctx.currentTime;
+    const cycles = Math.floor(duration/0.7);
+    for(let i=0;i<cycles;i++){
+      osc.frequency.setValueAtTime(650, now+i*0.7);
+      osc.frequency.linearRampToValueAtTime(950, now+i*0.7+0.35);
+      osc.frequency.linearRampToValueAtTime(650, now+i*0.7+0.7);
+    }
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now+0.1);
+    gain.gain.setValueAtTime(0.12, now+duration-0.3);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+duration);
+    osc.start(now); osc.stop(now+duration+0.05);
+  }
+  uiBlip(freq=880){
+    if(!this.ctx || !this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator(); osc.type='sine'; osc.frequency.value=freq;
+    const gain = ctx.createGain(); gain.gain.value=0.0001;
+    osc.connect(gain).connect(this.master);
+    const now = ctx.currentTime;
+    gain.gain.exponentialRampToValueAtTime(0.15, now+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now+0.14);
+    osc.start(now); osc.stop(now+0.16);
+  }
+  metroPass(){
+    if(!this.ctx || !this.enabled) return;
+    const ctx = this.ctx;
+    const buf = this._makeNoiseBuffer(2.0);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const filter = ctx.createBiquadFilter(); filter.type='bandpass'; filter.Q.value=1.2;
+    filter.frequency.setValueAtTime(220, ctx.currentTime);
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.14, ctx.currentTime+0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+1.9);
+    src.connect(filter).connect(gain).connect(this.master);
+    src.start(); src.stop(ctx.currentTime+2.0);
+  }
+  droneHum(){
+    if(!this.ctx || !this.enabled) return;
+    const ctx = this.ctx;
+    const osc = ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=140;
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.03, ctx.currentTime+0.1);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.6);
+    osc.connect(gain).connect(this.master);
+    osc.start(); osc.stop(ctx.currentTime+0.65);
+  }
+}
+
+/* ============================== CAMERA ============================== */
+class Camera{
+  constructor(){
+    this.x = 0; this.y = 0;       // pan target (screen-space offset)
+    this.tx = 0; this.ty = 0;
+    this.zoom = 1; this.tzoom = 1;
+    this.minZoom = 0.35; this.maxZoom = 2.6;
+
+    // --- Orbital rotation state (full 360°, cinematic, inertia-driven) ---
+    this.rot = 0; this.trot = 0;     // current & target rotation, radians
+    this.rotVel = 0;                 // angular velocity, rad/s (momentum after release)
+    this.userTurning = false;        // true while a pointer gesture is actively driving rotation
+    this.rotFriction = 2.6;          // exponential decay rate applied to rotVel once released
+
+    // --- Pan momentum (two-finger drag inertia) ---
+    this.vx = 0; this.vy = 0;        // pan momentum velocity (screen px/s)
+    this.userPanning = false;
+    this.panFriction = 4.2;
+
+    this.shakeT = 0; this.shakeMag = 0;
+    this.cinematicT = 0; this.cinematic = null;
+  }
+  panBy(dx,dy){
+    this.tx += dx; this.ty += dy;
+    this.x += dx; this.y += dy; // immediate drag response
+  }
+  /* Rotate the city around its own center. Positive delta = clockwise (screen). */
+  rotateBy(deltaRad){
+    this.rot += deltaRad;
+    this.trot = this.rot;
+  }
+  zoomAt(factor, screenX, screenY, w, h){
+    const oldZoom = this.tzoom;
+    const newZoom = clamp(oldZoom*factor, this.minZoom, this.maxZoom);
+    // keep the point under cursor stable
+    const cx = w/2, cy = h/2;
+    const wx = (screenX - cx - this.x)/oldZoom;
+    const wy = (screenY - cy - this.y)/oldZoom;
+    this.tzoom = newZoom;
+    this.tx = screenX - cx - wx*newZoom;
+    this.ty = screenY - cy - wy*newZoom;
+    this.x = this.tx; this.y = this.ty;
+  }
+  focusOn(worldSX, worldSY, w, h, zoomTo){
+    this.cinematic = {
+      fromX:this.x, fromY:this.y, fromZoom:this.zoom,
+      toX: -worldSX*(zoomTo||this.zoom), toY:-worldSY*(zoomTo||this.zoom),
+      toZoom: zoomTo||this.zoom, t:0, dur:1.05
+    };
+  }
+  shake(mag, dur){ this.shakeMag = Math.max(this.shakeMag, mag); this.shakeT = Math.max(this.shakeT, dur); }
+  update(dt){
+    if(this.cinematic){
+      const c = this.cinematic;
+      c.t += dt;
+      const t = clamp(c.t/c.dur,0,1);
+      const e = Easing.cubicInOut(t);
+      this.tx = lerp(c.fromX, c.toX, e);
+      this.ty = lerp(c.fromY, c.toY, e);
+      this.tzoom = lerp(c.fromZoom, c.toZoom, e);
+      if(t>=1) this.cinematic = null;
+    }
+    // smooth damping toward targets (spring-like, frame-rate independent)
+    const smooth = 1 - Math.pow(0.0000006, dt);
+    this.x = lerp(this.x, this.tx, smooth);
+    this.y = lerp(this.y, this.ty, smooth);
+    const smoothZoom = 1 - Math.pow(0.00000004, dt);
+    this.zoom = lerp(this.zoom, this.tzoom, smoothZoom);
+
+    // Angular momentum: while the user isn't actively turning, let rotation
+    // continue to glide on its own velocity and gently bleed off (inertia + friction).
+    if(!this.userTurning && Math.abs(this.rotVel) > 0.00001){
+      this.rot += this.rotVel * dt;
+      this.rotVel *= Math.exp(-this.rotFriction * dt);
+      if(Math.abs(this.rotVel) < 0.002) this.rotVel = 0;
+    }
+    this.trot = this.rot;
+
+    // Pan momentum: two-finger drags keep gliding briefly after release.
+    if(!this.userPanning && (Math.abs(this.vx)>0.01 || Math.abs(this.vy)>0.01)){
+      this.x += this.vx*dt; this.y += this.vy*dt;
+      this.tx = this.x; this.ty = this.y;
+      const decay = Math.exp(-this.panFriction * dt);
+      this.vx *= decay; this.vy *= decay;
+      if(Math.abs(this.vx)<0.5) this.vx = 0;
+      if(Math.abs(this.vy)<0.5) this.vy = 0;
+    }
+
+    if(this.shakeT>0){
+      this.shakeT -= dt;
+      if(this.shakeT<=0){ this.shakeMag=0; this.shakeT=0; }
+    }
+  }
+  getShakeOffset(){
+    if(this.shakeMag<=0) return {x:0,y:0};
+    const m = this.shakeMag * clamp(this.shakeT/0.4,0,1);
+    return { x:(Math.random()*2-1)*m, y:(Math.random()*2-1)*m };
+  }
+}
+
+/* ============================== INPUT MANAGER ============================== */
+/* Interaction model:
+     - One finger / mouse drag  -> orbit-rotate the city 360° around its center, with
+       cinematic momentum & easing once released (no sideways panning from one finger).
+     - Two finger pinch         -> smooth zoom.
+     - Two finger drag (center) -> pan the camera, with its own release momentum.
+     - Two finger twist         -> fine supplementary rotation adjustment, layered on
+       top of whatever orbit rotation is already happening.
+     - Double tap / double click-> cinematic eased zoom into the tapped point.
+     - Wheel                    -> zoom (desktop). */
+class InputManager{
+  constructor(canvas, camera, onFirstInteract){
+    this.canvas = canvas;
+    this.camera = camera;
+    this.dragging = false;
+    this.lastX = 0; this.lastY = 0; this.lastT = 0;
+    this.pinchDist = 0;
+    this.pinchAngle = 0;
+    this._panActive = false; this._lastPanX = 0; this._lastPanY = 0;
+    this.pointers = new Map();
+    this.onFirstInteract = onFirstInteract;
+    this._interacted = false;
+
+    this.rotSpeed = 0.0052;       // radians of orbit per pixel of one-finger horizontal drag
+    this._rotVelSmoothed = 0;     // smoothed angular velocity feeding momentum on release
+
+    this._lastTapT = 0; this._lastTapX = 0; this._lastTapY = 0; // manual double-tap detection
+
+    this._bind();
+  }
+  _fireFirst(){
+    if(!this._interacted){ this._interacted = true; this.onFirstInteract && this.onFirstInteract(); }
+  }
+  _doubleTap(clientX, clientY){
+    const w = window.innerWidth, h = window.innerHeight;
+    const wx = (clientX - w/2 - this.camera.x)/this.camera.zoom;
+    const wy = (clientY - h/2 - this.camera.y)/this.camera.zoom;
+    this.camera.focusOn(wx, wy, w, h, Math.min(this.camera.maxZoom, this.camera.zoom*1.8));
+  }
+  _bind(){
+    const c = this.canvas;
+    c.addEventListener('pointerdown', e=>{
+      this._fireFirst();
+      c.setPointerCapture(e.pointerId);
+      const now = performance.now();
+      this.pointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+
+      if(this.pointers.size===1){
+        this.dragging = true;
+        this.camera.cinematic = null;
+        this.camera.userTurning = true;
+        this.camera.rotVel = 0;
+        this._rotVelSmoothed = 0;
+        this.lastX = e.clientX; this.lastY = e.clientY; this.lastT = now;
+        c.classList.add('dragging');
+
+        // Robust manual double-tap detection (works for touch, mouse & pen alike).
+        const dt = now - this._lastTapT;
+        const dist = Math.hypot(e.clientX-this._lastTapX, e.clientY-this._lastTapY);
+        if(dt < 320 && dist < 34){
+          this._doubleTap(e.clientX, e.clientY);
+          this._lastTapT = 0;
+        } else {
+          this._lastTapT = now; this._lastTapX = e.clientX; this._lastTapY = e.clientY;
+        }
+      } else if(this.pointers.size===2){
+        this.dragging = false;
+        this.camera.userTurning = false;    // hand rotation control to the twist gesture below
+        this.camera.userPanning = true;
+        this.camera.vx = 0; this.camera.vy = 0;
+        const pts = [...this.pointers.values()];
+        this.pinchDist = this._getPinchDist();
+        this.pinchAngle = Math.atan2(pts[1].y-pts[0].y, pts[1].x-pts[0].x);
+        const ctr = this._getPinchCenter();
+        this._lastPanX = ctr.x; this._lastPanY = ctr.y;
+        this.lastT = now;
+      }
+    });
+
+    c.addEventListener('pointermove', e=>{
+      if(!this.pointers.has(e.pointerId)) return;
+      this.pointers.set(e.pointerId, {x:e.clientX,y:e.clientY});
+      const now = performance.now();
+
+      if(this.pointers.size>=2){
+        const pts = [...this.pointers.values()];
+
+        // Pinch -> smooth zoom
+        const nd = this._getPinchDist();
+        if(this.pinchDist>0){
+          const factor = nd/this.pinchDist;
+          const center = this._getPinchCenter();
+          this.camera.zoomAt(factor, center.x, center.y, window.innerWidth, window.innerHeight);
+        }
+        this.pinchDist = nd;
+
+        // Two-finger drag -> pan (with its own momentum tracked for release)
+        const center = this._getPinchCenter();
+        const dtS = Math.max(0.001, (now-this.lastT)/1000);
+        const pdx = center.x - this._lastPanX, pdy = center.y - this._lastPanY;
+        this.camera.cinematic = null;
+        this.camera.panBy(pdx, pdy);
+        this.camera.vx = lerp(this.camera.vx, pdx/dtS, 0.5);
+        this.camera.vy = lerp(this.camera.vy, pdy/dtS, 0.5);
+        this._lastPanX = center.x; this._lastPanY = center.y;
+
+        // Twist gesture -> fine rotation adjustment layered on top of orbit rotation
+        const ang = Math.atan2(pts[1].y-pts[0].y, pts[1].x-pts[0].x);
+        let dAng = ang - this.pinchAngle;
+        if(dAng > Math.PI) dAng -= TAU; else if(dAng < -Math.PI) dAng += TAU;
+        this.camera.rotateBy(dAng);
+        this.pinchAngle = ang;
+
+        this.lastT = now;
+      } else if(this.dragging){
+        const dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
+        const dtS = Math.max(0.001, (now-this.lastT)/1000);
+        this.lastX = e.clientX; this.lastY = e.clientY; this.lastT = now;
+
+        // One-finger drag orbits the city around its center (horizontal motion = yaw).
+        const deltaRot = -dx * this.rotSpeed;
+        this.camera.rotateBy(deltaRot);
+        const instVel = deltaRot/dtS;
+        this._rotVelSmoothed = lerp(this._rotVelSmoothed, instVel, 0.35);
+      }
+    });
+
+    const end = e=>{
+      this.pointers.delete(e.pointerId);
+      if(this.pointers.size===0){
+        if(this.dragging){
+          this.camera.userTurning = false;
+          // Hand off the smoothed drag velocity as angular momentum for a cinematic coast-to-stop.
+          this.camera.rotVel = clamp(this._rotVelSmoothed, -20, 20);
+        }
+        this.dragging = false;
+        c.classList.remove('dragging');
+      }
+      if(this.pointers.size<2){
+        this.pinchDist = 0;
+        this.camera.userPanning = false;
+      }
+      // Dropping from 2 fingers to 1 re-arms single-finger orbit rotation cleanly.
+      if(this.pointers.size===1){
+        const [p] = [...this.pointers.values()];
+        this.dragging = true;
+        this.camera.userTurning = true;
+        this.camera.rotVel = 0;
+        this._rotVelSmoothed = 0;
+        this.lastX = p.x; this.lastY = p.y; this.lastT = performance.now();
+      }
+    };
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+    c.addEventListener('pointerleave', e=>{ if(this.pointers.size<=1) end(e); });
+
+    c.addEventListener('wheel', e=>{
+      this._fireFirst();
+      e.preventDefault();
+      this.camera.cinematic = null;
+      const factor = Math.pow(1.0015, -e.deltaY);
+      this.camera.zoomAt(factor, e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+    }, {passive:false});
+
+    c.addEventListener('dblclick', e=>{
+      this._fireFirst();
+      this._doubleTap(e.clientX, e.clientY);
+    });
+  }
+  _getPinchDist(){
+    const pts = [...this.pointers.values()];
+    if(pts.length<2) return 0;
+    return Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+  }
+  _getPinchCenter(){
+    const pts = [...this.pointers.values()];
+    if(pts.length<2) return {x:window.innerWidth/2,y:window.innerHeight/2};
+    return { x:(pts[0].x+pts[1].x)/2, y:(pts[0].y+pts[1].y)/2 };
+  }
+}
+
+/* ============================== CITY CONSTANTS ============================== */
+const CITY = {
+  GRID_N: 13,          // blocks per side
+  PITCH: 3.1,          // world units between block centers
+  LOT: 2.05,           // max footprint span of a lot
+  ROAD_HALF: 0.42,     // half width of road surface
+};
+
+const NEON_HUES = [186, 200, 320, 300, 45, 265, 160, 355, 25, 275, 150, 15, 340, 30, 175, 280, 225, 140, 50];
+// Window light-color palette: warm white, soft yellow, cyan, blue, purple, pink.
+const WINDOW_HUES = [42, 48, 190, 210, 270, 320];
+
+// Premium district palettes: each pool is a set of building hues (facade + roof accents)
+// plus a saturation/lightness bias so districts read as distinct, complementary color zones
+// without altering the underlying city grid, layout, or building placement logic.
+const DISTRICTS = [
+  { name:'luxury',     hues:[40, 46, 34, 50],        satBias:[14,26], lightBias:[30,42], accent:[45, 42, 340] },   // cream + gold + white
+  { name:'cyber',      hues:[200,186,265,225,300],   satBias:[38,60], lightBias:[22,34], accent:[186,300,265] },   // blue + cyan + purple
+  { name:'residential',hues:[25, 15, 340, 34],       satBias:[26,42], lightBias:[30,44], accent:[340,25,45] },     // peach + cream + pink
+  { name:'eco',        hues:[150,160,140,170],       satBias:[24,40], lightBias:[26,38], accent:[150,175,40] },    // green + white + glass
+  { name:'business',   hues:[220,225,265,210],       satBias:[16,30], lightBias:[24,34], accent:[210,265,186] },   // silver + indigo + blue
+];
+function districtFor(cx,cy,rng){
+  // 5 angular sectors radiating from the city core, with a little per-lot jitter so the
+  // boundaries feel organic rather than perfectly pie-sliced.
+  const ang = Math.atan2(cy,cx) + Math.PI + randRange(rng,-0.18,0.18);
+  const idx = Math.floor((ang/(Math.PI*2))*DISTRICTS.length) % DISTRICTS.length;
+  return DISTRICTS[idx];
+}
+
+/* ============================== BUILDING ============================== */
+class Building{
+  constructor(cx, cy, rng){
+    this.cx = cx; this.cy = cy; // block center world coords
+    const distFromCenter = Math.hypot(cx,cy);
+    const centerBoost = clamp(1.4 - distFromCenter/16, 0, 1);
+
+    this.w = randRange(rng, 0.85, CITY.LOT*0.5);
+    this.d = randRange(rng, 0.85, CITY.LOT*0.5);
+    this.x0 = cx - this.w; this.x1 = cx + this.w;
+    this.y0 = cy - this.d; this.y1 = cy + this.d;
+
+    const baseH = randRange(rng, 10, 34);
+    const towerBonus = Math.pow(rng(),2) * 120 * (0.3+centerBoost);
+    this.height = baseH + towerBonus;
+    this.floors = Math.max(3, Math.round(this.height/3.2));
+    this.floorH = this.height/this.floors;
+
+    // Assign this lot to a premium district palette (color only — does not affect
+    // footprint, height, or grid placement) so the skyline reads as distinct, vibrant zones.
+    this.district = districtFor(cx,cy,rng);
+    const huePool = rng()<0.78 ? this.district.hues : NEON_HUES; // occasional cross-district accent building
+    this.hue = pick(rng, huePool) + randRange(rng,-7,7);
+    this.hue2 = pick(rng, huePool) + randRange(rng,-7,7);
+    this.satBase = randRange(rng, this.district.satBias[0], this.district.satBias[1]);
+    this.matVal = randRange(rng, this.district.lightBias[0], this.district.lightBias[1]); // bright, premium glass/stone rather than flat dark
+    this.baseMatVal = this.matVal; // preserved so tier-based brightening never compounds
+    this.roofType = pick(rng, ['antenna','helipad','garden','solar','tanks','billboard','spire']);
+    this.hasBillboardWall = rng() < 0.22;
+    this.billboardHue = pick(rng, this.district.accent.concat(NEON_HUES));
+    this.billboardSeed = rng()*1000;
+
+    // window lit-state seed grid (per floor, per side segment)
+    this.winSeed = Math.floor(rng()*99999);
+    this.winCols = Math.max(2, Math.round(this.w*3));
+    this.flickerPhase = rng()*10;
+    this.flickerBuilding = rng() < 0.08; // whole-building flicker (power issue candidate)
+
+    this.hasAC = rng()<0.6;
+    this.hasElevatorGlass = rng()<0.35;
+    this.elevatorPhase = rng()*10;
+    this.elevatorSpeed = randRange(rng,0.15,0.4);
+
+    // precompute a stable per-window RNG-derived lit pattern
+    this._winRng = mulberry32(this.winSeed);
+    this.windowStates = [];
+    for(let f=0; f<this.floors; f++){
+      const row = [];
+      for(let c=0;c<this.winCols*2;c++){ // both faces worth of windows approx
+        row.push(this._winRng() < 0.62);
+      }
+      this.windowStates.push(row);
+    }
+
+    /* ---- City-growth / decay overlay state (does not affect the procedural mesh above,
+       only how tall it currently renders and how "alive" it currently looks). ---- */
+    this.tier = 0;                       // productivity-driven upgrade tier, 0..maxTier
+    this.baseHeight = this.height;       // original generated height (tier 0)
+    this.targetHeight = this.height;     // authoritative height the building is growing toward
+    this.displayHeight = this.height;    // actually-rendered height, animates toward targetHeight
+    this.constructing = false;
+    this.constructionT = 0; this.constructionDur = 0; this.constructionFrom = this.height;
+    this.vitality = 1;                   // 0..1, currently unused directly (see abandonVisual)
+    this.abandonVisual = 0;              // 0 = thriving, 1 = fully abandoned (smoothed each frame)
+    // Farther-out lots go idle first and rebuild last, mirroring a real city's core/periphery;
+    // a touch of per-building noise keeps the boundary organic rather than a perfect ring.
+    const approxMaxDist = (CITY.GRID_N-1)/2 * CITY.PITCH * Math.SQRT2;
+    const normDist = clamp(distFromCenter/approxMaxDist, 0, 1);
+    this.decayThreshold = clamp(normDist*0.82 + (this.winSeed%1000)/1000*0.18, 0.05, 0.97);
+  }
+  key(){ return `${this.x0.toFixed(2)}_${this.y0.toFixed(2)}`; }
+  sortDepth(){ return this.x1 + this.y1; }
+}
+
+/* ============================== CITY (grid, roads, blocks) ============================== */
+class City{
+  constructor(seed){
+    this.seed = seed;
+    this.rng = mulberry32(seed);
+    this.buildings = [];
+    this.parks = [];
+    this.waterTiles = [];
+    this.plazas = [];
+    this.intersections = []; // {x,y} world coords, has traffic light
+    this.roadSegmentsH = []; // horizontal road center-lines: {y, x0, x1}
+    this.roadSegmentsV = []; // vertical: {x, y0, y1}
+    this.metroTrack = null;
+    this._generate();
+  }
+
+  _generate(){
+    const N = CITY.GRID_N;
+    const half = (N-1)/2;
+    const rng = this.rng;
+
+    this.blocks = [];
+    for(let gy=0; gy<N; gy++){
+      for(let gx=0; gx<N; gx++){
+        const cx = (gx-half)*CITY.PITCH;
+        const cy = (gy-half)*CITY.PITCH;
+        const r = rng();
+        const distC = Math.hypot(gx-half, gy-half);
+        let type = 'building';
+        if(distC < 1.4 && rng()<0.7) type='plaza';
+        else if(gy === Math.floor(N/2) && Math.abs(gx-half) > N*0.28) type = 'water';
+        else if(r < 0.10) type = 'park';
+        else if(r < 0.14) type = 'plaza';
+
+        const block = {gx,gy,cx,cy,type};
+        this.blocks.push(block);
+
+        if(type==='building'){
+          const b = new Building(cx,cy,rng);
+          this.buildings.push(b);
+        } else if(type==='park'){
+          this.parks.push({cx,cy, r:randRange(rng,0.7,0.95), treeSeed: rng()*999});
+        } else if(type==='water'){
+          this.waterTiles.push({cx,cy});
+        } else if(type==='plaza'){
+          this.plazas.push({cx,cy, hasFountain: rng()<0.3, hasHologram: rng()<0.4, hologramHue: pick(rng,NEON_HUES)});
+        }
+      }
+    }
+
+    // Road network: one road line between every pair of adjacent block rows/cols
+    const span = (N-1)*CITY.PITCH/2 + CITY.PITCH*0.5;
+    for(let gy=0; gy<=N; gy++){
+      const y = (gy-half-0.5)*CITY.PITCH;
+      this.roadSegmentsH.push({y, x0:-span, x1:span});
+    }
+    for(let gx=0; gx<=N; gx++){
+      const x = (gx-half-0.5)*CITY.PITCH;
+      this.roadSegmentsV.push({x, y0:-span, y1:span});
+    }
+    for(let gy=0; gy<=N; gy++){
+      for(let gx=0; gx<=N; gx++){
+        const x = (gx-half-0.5)*CITY.PITCH;
+        const y = (gy-half-0.5)*CITY.PITCH;
+        this.intersections.push({
+          x,y,
+          lightPhase: rng()*4,
+          lightOffset: rng()*TAU
+        });
+      }
+    }
+
+    // Metro elevated track: one straight diagonal-ish line across city (along a fixed y band, elevated z)
+    this.metroTrack = {
+      y: (Math.floor(N*0.28)-half)*CITY.PITCH,
+      x0: -span, x1: span, z: 26,
+      stations: []
+    };
+    for(let s=-1;s<=1;s++){
+      this.metroTrack.stations.push({ x: s*span*0.55, y:this.metroTrack.y });
+    }
+
+    this.citySpan = span;
+    this.bounds = {minX:-span, maxX:span, minY:-span, maxY:span};
+
+    // Growth queue: central lots upgrade first (flagship towers rising first), matching the
+    // same center-out logic used for decay (core stays vital longest, periphery goes first).
+    this.growthOrder = this.buildings
+      .map((b,i)=>i)
+      .sort((ia,ib)=> Math.hypot(this.buildings[ia].cx,this.buildings[ia].cy) - Math.hypot(this.buildings[ib].cx,this.buildings[ib].cy));
+  }
+
+  // find nearest road lane center for traffic (returns lane info near a point)
+  isRoadCell(gx,gy){ return gx>=0 && gy>=0; }
+}
+
+/* ============================== PARTICLE SYSTEM ============================== */
+/* Screen-space particles (rain, fog wisps, dust) are independent of world camera for performance & full coverage.
+   World-space particles (smoke, steam, sparkle, neon glow, fire) are projected through the camera each frame. */
+class ParticleSystem{
+  constructor(){
+    this.rain = new Pool(()=>({x:0,y:0,len:0,speed:0,alpha:0}), (p)=>{});
+    this.splash = new Pool(()=>({x:0,y:0,r:0,t:0,dur:0}), (p)=>{});
+    this.dust = new Pool(()=>({x:0,y:0,vx:0,vy:0,r:0,alpha:0}), (p)=>{});
+    this.fog = new Pool(()=>({x:0,y:0,r:0,vx:0,alpha:0}), (p)=>{});
+
+    this.world = new Pool(()=>({type:'',x:0,y:0,z:0,vx:0,vy:0,vz:0,life:0,maxLife:1,size:1,hue:0,alpha:1}), (p)=>{});
+
+    this.w = window.innerWidth; this.h = window.innerHeight;
+  }
+  resize(w,h){ this.w=w; this.h=h; }
+
+  spawnRainDrop(){
+    const p = this.rain.spawn();
+    p.x = Math.random()*this.w; p.y = -20;
+    p.len = randRange(Math.random,14,34);
+    p.speed = randRange(Math.random,900,1500);
+    p.alpha = randRange(Math.random,0.15,0.45);
+    return p;
+  }
+  spawnSplash(x,y){
+    const p = this.splash.spawn();
+    p.x=x; p.y=y; p.r=0; p.t=0; p.dur=randRange(Math.random,0.25,0.45);
+  }
+  spawnDust(){
+    const p = this.dust.spawn();
+    p.x = Math.random()*this.w; p.y = Math.random()*this.h;
+    p.vx = randRange(Math.random, 60,160); p.vy = randRange(Math.random,-10,10);
+    p.r = randRange(Math.random,1,3); p.alpha = randRange(Math.random,0.05,0.22);
+  }
+  spawnFogWisp(){
+    const p = this.fog.spawn();
+    p.x = Math.random()*this.w*1.4 - this.w*0.2; p.y = Math.random()*this.h;
+    p.r = randRange(Math.random,120,320); p.vx = randRange(Math.random,4,18);
+    p.alpha = randRange(Math.random,0.03,0.09);
+  }
+  spawnWorld(type, x,y,z, opts={}){
+    const p = this.world.spawn();
+    p.type=type; p.x=x; p.y=y; p.z=z;
+    p.vx = opts.vx||0; p.vy=opts.vy||0; p.vz=opts.vz|| (type==='smoke'||type==='steam' ? randRange(Math.random,6,14) : 0);
+    p.life = 0; p.maxLife = opts.maxLife || 2.2;
+    p.size = opts.size || 4;
+    p.hue = opts.hue!==undefined?opts.hue:190;
+    p.alpha = opts.alpha!==undefined?opts.alpha:0.5;
+    p.growth = opts.growth || 6;
+    p.flicker = opts.flicker || false;
+    return p;
+  }
+
+  update(dt, windSpeed){
+    this.rain.update(dt,(p)=>{ p.y += p.speed*dt; p.x += windSpeed*0.4*dt; return p.y < this.h+40; });
+    this.splash.update(dt,(p)=>{ p.t+=dt; p.r = (p.t/p.dur)*10; return p.t<p.dur; });
+    this.dust.update(dt,(p)=>{ p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.x>this.w+20){p.x=-20;} return true; });
+    this.fog.update(dt,(p)=>{ p.x+=p.vx*dt; if(p.x>this.w*1.3){p.x=-this.w*0.3;} return true; });
+    this.world.update(dt,(p)=>{
+      p.life += dt;
+      p.x += p.vx*dt; p.y += p.vy*dt; p.z += p.vz*dt;
+      p.size += p.growth*dt;
+      return p.life < p.maxLife;
+    });
+  }
+
+  drawScreenLayer(ctx, weather){
+    // Rain streaks
+    if(this.rain.active.length){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(180,220,255,0.5)';
+      ctx.lineWidth = 1.1;
+      for(const p of this.rain.active){
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        ctx.moveTo(p.x,p.y);
+        ctx.lineTo(p.x-2, p.y+p.len);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // Splashes
+    if(this.splash.active.length){
+      ctx.save();
+      ctx.strokeStyle='rgba(200,230,255,0.5)';
+      for(const p of this.splash.active){
+        ctx.globalAlpha = 1-(p.t/p.dur);
+        ctx.beginPath(); ctx.ellipse(p.x,p.y,p.r,p.r*0.4,0,0,TAU); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // Dust
+    if(this.dust.active.length){
+      ctx.save();
+      for(const p of this.dust.active){
+        ctx.fillStyle = `rgba(210,170,110,${p.alpha})`;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Fog wisps
+    if(this.fog.active.length){
+      ctx.save();
+      for(const p of this.fog.active){
+        const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+        g.addColorStop(0, `rgba(180,200,220,${p.alpha})`);
+        g.addColorStop(1, 'rgba(180,200,220,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  drawWorldParticle(ctx, p, sx, sy, scale){
+    const t = p.life/p.maxLife;
+    const fade = 1-t;
+    ctx.save();
+    if(p.type==='smoke' || p.type==='steam'){
+      const g = ctx.createRadialGradient(sx,sy,0,sx,sy,p.size*scale);
+      const base = p.type==='steam' ? '220,230,240' : '90,95,105';
+      g.addColorStop(0, `rgba(${base},${p.alpha*fade*0.5})`);
+      g.addColorStop(1, `rgba(${base},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx,sy,p.size*scale,0,TAU); ctx.fill();
+    } else if(p.type==='sparkle'){
+      const a = p.alpha*fade*(p.flicker?(0.5+0.5*Math.sin(p.life*40)):1);
+      ctx.fillStyle = hslStr(p.hue,90,70,a);
+      ctx.beginPath(); ctx.arc(sx,sy,Math.max(0.5,p.size*0.3*scale),0,TAU); ctx.fill();
+    } else if(p.type==='glow'){
+      const g = ctx.createRadialGradient(sx,sy,0,sx,sy,p.size*scale);
+      g.addColorStop(0, hslStr(p.hue,100,65,p.alpha*fade));
+      g.addColorStop(1, hslStr(p.hue,100,65,0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx,sy,p.size*scale,0,TAU); ctx.fill();
+    } else if(p.type==='fire'){
+      const g = ctx.createRadialGradient(sx,sy,0,sx,sy,p.size*scale);
+      g.addColorStop(0, `rgba(255,220,120,${0.8*fade})`);
+      g.addColorStop(0.5, `rgba(255,120,40,${0.5*fade})`);
+      g.addColorStop(1, `rgba(255,60,20,0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx,sy,p.size*scale,0,TAU); ctx.fill();
+    } else if(p.type==='firework'){
+      ctx.fillStyle = hslStr(p.hue,100,70,fade);
+      ctx.beginPath(); ctx.arc(sx,sy,Math.max(0.6,p.size*0.25*scale),0,TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+/* ============================== WEATHER ENGINE ============================== */
+const WEATHER_TYPES = ['clear','rain','heavyrain','storm','fog','dust'];
+class WeatherEngine{
+  constructor(particles, audio){
+    this.particles = particles;
+    this.audio = audio;
+    this.current = 'clear';
+    this.target = 'clear';
+    this.blend = 1; // 0..1 transition progress
+    this.auto = true;
+    this.windAngle = Math.random()*TAU;
+    this.windSpeed = 20;
+    this.rainTimer = 0;
+    this.dustTimer = 0;
+    this.fogTimer = 0;
+    this.thunderCooldown = randRange(Math.random,4,10);
+    this.flash = 0; // screen flash intensity for lightning
+    this.autoTimer = randRange(Math.random,40,80);
+    this.puddle = 0; // 0..1 wetness for reflections
+  }
+  setWeather(type, isAuto){
+    if(type===this.target) return;
+    this.target = type;
+    this.blend = 0;
+    if(!isAuto) this.auto = false;
+  }
+  intensityOf(type){
+    switch(type){
+      case 'rain': return 0.45;
+      case 'heavyrain': return 1.0;
+      case 'storm': return 1.0;
+      default: return 0;
+    }
+  }
+  update(dt, w, h){
+    this.particles.resize(w,h);
+    // transition blend
+    if(this.blend<1){ this.blend = Math.min(1, this.blend + dt/3.5); if(this.blend>=1) this.current=this.target; }
+
+    if(this.auto){
+      this.autoTimer -= dt;
+      if(this.autoTimer<=0){
+        this.autoTimer = randRange(Math.random, 50, 110);
+        const choices = ['clear','clear','rain','fog','clear','heavyrain','dust','storm'];
+        this.setWeather(choices[Math.floor(Math.random()*choices.length)], true);
+      }
+    }
+
+    const rainI = lerp(this.intensityOf(this.current), this.intensityOf(this.target), this.blend);
+    this.puddle = lerp(this.puddle, clamp(rainI,0,1), dt*0.1);
+
+    // wind
+    this.windAngle += (Math.random()-0.5)*dt*0.2;
+    const targetWind = (this.target==='storm'?70:this.target==='dust'?85:this.target==='rain'?35:this.target==='heavyrain'?55:14);
+    this.windSpeed = lerp(this.windSpeed, targetWind, dt*0.3);
+
+    this.audio.setRainLevel(rainI);
+    this.audio.setWindLevel(clamp(this.windSpeed/85,0,1));
+
+    // spawn rain
+    if(rainI>0){
+      this.rainTimer -= dt;
+      const rate = rainI*(this.target==='storm'?900:this.target==='heavyrain'?700:300);
+      if(this.rainTimer<=0 && rate>0){
+        this.rainTimer = 1/rate;
+        this.particles.spawnRainDrop();
+      }
+    }
+    // fog
+    const fogI = (this.target==='fog'?1:0)*this.blend + (this.current==='fog'?1:0)*(1-this.blend);
+    if(fogI>0.05){
+      this.fogTimer -= dt;
+      if(this.fogTimer<=0){ this.fogTimer = 0.15; this.particles.spawnFogWisp(); }
+    }
+    // dust
+    const dustI = (this.target==='dust'?1:0);
+    if(dustI>0.05){
+      this.dustTimer -= dt;
+      if(this.dustTimer<=0){ this.dustTimer=0.02; this.particles.spawnDust(); }
+    }
+
+    // thunder
+    if(this.target==='storm'){
+      this.thunderCooldown -= dt;
+      if(this.thunderCooldown<=0){
+        this.thunderCooldown = randRange(Math.random,5,13);
+        this.flash = 1;
+        this.audio.thunder();
+      }
+    }
+    this.flash = Math.max(0, this.flash - dt*2.2);
+  }
+  label(){
+    const map = {clear:'Clear', rain:'Rain', heavyrain:'Heavy Rain', storm:'Thunderstorm', fog:'Fog', dust:'Dust Storm'};
+    return map[this.target] || 'Clear';
+  }
+}
+
+/* ============================== LIGHTING / DAY-NIGHT ENGINE ============================== */
+class LightingEngine{
+  constructor(){
+    this.hour = 8.5;           // 0..24
+    this.daySpeed = 0.045;     // hours per real second (auto cycle) -> ~9min full day
+    this.autoCycle = true;
+    this.fixedHour = null;
+  }
+  setPhase(name){
+    const map = { morning:7, afternoon:13.5, sunset:18.3, night:21.5, midnight:0.5 };
+    if(name==='auto'){ this.autoCycle = true; this.fixedHour = null; return; }
+    this.autoCycle = false;
+    this.fixedHour = map[name] !== undefined ? map[name] : 12;
+    this.hour = this.fixedHour;
+  }
+  update(dt){
+    if(this.autoCycle){
+      this.hour = (this.hour + this.daySpeed*dt) % 24;
+    } else if(this.fixedHour!==null){
+      // gently drift toward fixed hour then hold, plus tiny wobble for life
+      this.hour = this.fixedHour;
+    }
+  }
+  // darkness: 0 = full day, 1 = full night
+  darkness(){
+    const h = this.hour;
+    // daylight window ~6-18, twilight transitions 1.5h each side
+    if(h>7 && h<17) return 0;
+    if(h<=7) return smoothstep(5.5,7,h) < 1 ? 1-smoothstep(5.5,7,h) : 0;
+    if(h>=17) return smoothstep(17,18.5,h);
+    return 0.5;
+  }
+  sunFactor(){ // -1 (deep night) .. 1 (noon) for color temperature
+    const h = this.hour;
+    const rad = ((h-6)/24)*TAU;
+    return Math.sin(rad);
+  }
+  skyColors(){
+    const h = this.hour;
+    // Key color stops across the day, richly cyberpunk-tinted
+    const stops = [
+      {h:0,  top:[8,6,26],  bot:[22,10,40]},
+      {h:5,  top:[10,8,34], bot:[40,18,55]},
+      {h:6.5,top:[45,30,70],bot:[255,140,90]},
+      {h:8,  top:[90,150,220],bot:[255,200,150]},
+      {h:12, top:[70,150,235],bot:[190,220,240]},
+      {h:16, top:[80,140,220],bot:[255,190,140]},
+      {h:18, top:[60,40,90], bot:[255,110,80]},
+      {h:19.5,top:[20,14,45],bot:[90,30,70]},
+      {h:21, top:[8,8,28],  bot:[35,15,55]},
+      {h:24, top:[8,6,26],  bot:[22,10,40]},
+    ];
+    let a=stops[0], b=stops[stops.length-1];
+    for(let i=0;i<stops.length-1;i++){
+      if(h>=stops[i].h && h<=stops[i+1].h){ a=stops[i]; b=stops[i+1]; break; }
+    }
+    const t = clamp(invLerp(a.h,b.h,h),0,1);
+    const top = [0,1,2].map(i=>Math.round(lerp(a.top[i],b.top[i],t)));
+    const bot = [0,1,2].map(i=>Math.round(lerp(a.bot[i],b.bot[i],t)));
+    return { top, bot };
+  }
+  timeLabel(){
+    const h = Math.floor(this.hour);
+    const m = Math.floor((this.hour-h)*60);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+}
+
+/* ============================== VEHICLE (ground traffic) ============================== */
+const VEHICLE_KINDS = {
+  car:        { len:0.34, wid:0.17, speed:2.6, hueRange:[0,360] },
+  taxi:       { len:0.34, wid:0.17, speed:2.4, hue:48 },
+  police:     { len:0.36, wid:0.18, speed:3.1, hue:210 },
+  firetruck:  { len:0.5,  wid:0.2,  speed:2.7, hue:0 },
+  ambulance:  { len:0.42, wid:0.19, speed:2.9, hue:0 },
+  deliverybot:{ len:0.2,  wid:0.16, speed:1.3, hue:140 },
+};
+
+class Vehicle{
+  constructor(){ this.reset(); }
+  reset(){
+    this.kind='car';
+    this.laneAxis='H';      // 'H' moves along x, 'V' moves along y
+    this.lineCoord=0;       // the fixed coordinate (y for H, x for V)
+    this.dir=1;             // +1 or -1
+    this.perp=0;            // perpendicular lane offset
+    this.pos=0;             // position along movement axis
+    this.speed=0; this.maxSpeed=2.6;
+    this.hue=0;
+    this.state='drive';     // drive | braking | stopped | parked | turning
+    this.parkTimer=0;
+    this.emergency=false;
+    this.sirenOn=false;
+    this.z = 0;
+    this.turnSignal=0;
+    this.alive=true;
+    this.laneKey='';
+    this.headlightPhase = Math.random()*10;
+  }
+  worldPos(){
+    if(this.laneAxis==='H') return { x:this.pos, y:this.lineCoord + this.perp };
+    return { x:this.lineCoord + this.perp, y:this.pos };
+  }
+  heading(){
+    if(this.laneAxis==='H') return this.dir>0? 0 : Math.PI;
+    return this.dir>0? Math.PI/2 : -Math.PI/2;
+  }
+}
+
+/* ============================== PEDESTRIAN ============================== */
+class Pedestrian{
+  constructor(){ this.reset(); }
+  reset(){
+    this.axis='H'; this.lineCoord=0; this.dir=1; this.perp=0; this.pos=0;
+    this.speed = randRange(Math.random,0.28,0.5);
+    this.phase = Math.random()*10;
+    this.hue = randRange(Math.random,0,360);
+    this.state='walk'; this.waitTimer=0;
+    this.alive=true;
+    this.bob=0;
+  }
+  worldPos(){
+    if(this.axis==='H') return { x:this.pos, y:this.lineCoord+this.perp };
+    return { x:this.lineCoord+this.perp, y:this.pos };
+  }
+}
+
+/* ============================== FLYING UNIT (drones / taxis / robots) ============================== */
+class FlyingUnit{
+  constructor(){ this.reset(); }
+  reset(){
+    this.kind='drone'; // drone | taxi | construction | maintenance | delivery
+    this.x=0; this.y=0; this.z=40;
+    this.tx=0; this.ty=0; this.tz=40;
+    this.speed=6;
+    this.hue=190;
+    this.bobPhase=Math.random()*10;
+    this.rotorPhase=0;
+    this.state='enroute';
+    this.waitTimer=0;
+    this.alive=true;
+    this.trail=[];
+    this.blinkPhase=Math.random()*TAU;
+  }
+  pickNewTarget(span){
+    this.tx = randRange(Math.random,-span,span);
+    this.ty = randRange(Math.random,-span,span);
+    if(this.kind==='taxi') this.tz = 34+Math.random()*10;
+    else if(this.kind==='drone'||this.kind==='delivery') this.tz = 50+Math.random()*30;
+    else this.tz = this.z; // construction/maintenance hover near building
+  }
+}
+
+/* ============================== METRO TRAIN ============================== */
+class MetroTrain{
+  constructor(track){
+    this.track = track;
+    this.pos = randRange(Math.random, track.x0, track.x1);
+    this.dir = Math.random()<0.5?1:-1;
+    this.speed = 34;
+    this.state='run';
+    this.stopTimer=0;
+    this.cars = 4;
+  }
+  update(dt, audio){
+    if(this.state==='run'){
+      this.pos += this.dir*this.speed*dt;
+      // check station proximity
+      for(const st of this.track.stations){
+        if(Math.abs(st.x-this.pos) < 0.6 && this.speed>10){
+          this.speed = Math.max(2, this.speed-40*dt*6);
+        }
+      }
+      if(this.pos>this.track.x1){ this.pos=this.track.x1; this.dir=-1; this.state='station'; this.stopTimer=2.4; audio.metroPass(); }
+      if(this.pos<this.track.x0){ this.pos=this.track.x0; this.dir=1; this.state='station'; this.stopTimer=2.4; audio.metroPass(); }
+      for(const st of this.track.stations){
+        if(Math.abs(st.x-this.pos)<0.15 && this.speed<8){
+          this.state='station'; this.stopTimer=1.8; audio.metroPass();
+        }
+      }
+    } else if(this.state==='station'){
+      this.stopTimer -= dt;
+      this.speed = lerp(this.speed, 0, dt*3);
+      if(this.stopTimer<=0){ this.state='run'; }
+    }
+    if(this.state==='run') this.speed = lerp(this.speed, 34, dt*0.5);
+  }
+}
+
+/* ============================== TRAFFIC SYSTEM ============================== */
+class TrafficSystem{
+  constructor(city, audio){
+    this.city = city;
+    this.audio = audio;
+    this.span = city.citySpan;
+
+    this.cars = new Pool(()=>new Vehicle(), (v)=>v.reset());
+    this.peds = new Pool(()=>new Pedestrian(), (p)=>p.reset());
+    this.flyers = new Pool(()=>new FlyingUnit(), (f)=>f.reset());
+    this.metros = [ new MetroTrain(city.metroTrack), new MetroTrain(city.metroTrack) ];
+    this.metros[1].pos = city.metroTrack.x0 + (city.metroTrack.x1-city.metroTrack.x0)*0.5;
+
+    this.lightClock = 0;
+    this.lightPeriod = 11; // seconds full cycle
+    this.hGreenWindow = 5; // 0..5 H green, 5-5.6 yellow, else red; swapped for V
+
+    this.targetCars = 46;
+    this.targetPeds = 60;
+    this.targetFlyers = 24;
+    this.density = 1;
+
+    this.laneGroups = new Map();
+    this.regroupTimer = 0;
+
+    this.trafficLoad = 0.4; // 0..1 displayed stat
+
+    this._spawnInitial();
+  }
+
+  setDensity(d){ this.density = d; }
+
+  _spawnInitial(){
+    for(let i=0;i<this.targetCars;i++) this._spawnCar();
+    for(let i=0;i<this.targetPeds;i++) this._spawnPed();
+    for(let i=0;i<this.targetFlyers;i++) this._spawnFlyer();
+  }
+
+  _randomLane(){
+    const roadsH = this.city.roadSegmentsH;
+    const roadsV = this.city.roadSegmentsV;
+    const useH = Math.random()<0.5;
+    if(useH){
+      const line = roadsH[randInt(Math.random,0,roadsH.length-1)];
+      const dir = Math.random()<0.5?1:-1;
+      return { axis:'H', lineCoord:line.y, dir, span:[line.x0,line.x1] };
+    } else {
+      const line = roadsV[randInt(Math.random,0,roadsV.length-1)];
+      const dir = Math.random()<0.5?1:-1;
+      return { axis:'V', lineCoord:line.x, dir, span:[line.y0,line.y1] };
+    }
+  }
+
+  _spawnCar(kind){
+    kind = kind || (Math.random()<0.08?'taxi':'car');
+    const spec = VEHICLE_KINDS[kind];
+    const lane = this._randomLane();
+    const v = this.cars.spawn();
+    v.kind = kind;
+    v.laneAxis = lane.axis; v.lineCoord = lane.lineCoord; v.dir = lane.dir;
+    v.perp = (lane.dir>0? 1:-1) * CITY.ROAD_HALF*0.5;
+    v.pos = randRange(Math.random, lane.span[0], lane.span[1]);
+    v.maxSpeed = spec.speed * randRange(Math.random,0.85,1.15);
+    v.speed = v.maxSpeed*0.6;
+    v.hue = spec.hue!==undefined ? spec.hue : randRange(Math.random,0,360);
+    v.emergency = (kind==='police'||kind==='firetruck'||kind==='ambulance');
+    v.laneKey = lane.axis+'_'+lane.lineCoord.toFixed(2)+'_'+lane.dir;
+    return v;
+  }
+  _spawnPed(){
+    const roadsH = this.city.roadSegmentsH;
+    const roadsV = this.city.roadSegmentsV;
+    const useH = Math.random()<0.5;
+    const p = this.peds.spawn();
+    if(useH){
+      const line = roadsH[randInt(Math.random,0,roadsH.length-1)];
+      p.axis='H'; p.lineCoord=line.y; p.dir = Math.random()<0.5?1:-1;
+      p.perp = (Math.random()<0.5?1:-1)*(CITY.ROAD_HALF+0.28+Math.random()*0.15);
+      p.pos = randRange(Math.random, line.x0, line.x1);
+    } else {
+      const line = roadsV[randInt(Math.random,0,roadsV.length-1)];
+      p.axis='V'; p.lineCoord=line.x; p.dir = Math.random()<0.5?1:-1;
+      p.perp = (Math.random()<0.5?1:-1)*(CITY.ROAD_HALF+0.28+Math.random()*0.15);
+      p.pos = randRange(Math.random, line.y0, line.y1);
+    }
+    return p;
+  }
+  _spawnFlyer(kind){
+    kind = kind || pick(Math.random, ['drone','drone','taxi','delivery','maintenance']);
+    const f = this.flyers.spawn();
+    f.kind = kind;
+    f.x = randRange(Math.random,-this.span,this.span);
+    f.y = randRange(Math.random,-this.span,this.span);
+    f.z = kind==='taxi'?38: kind==='maintenance'? randRange(Math.random,20,60) : randRange(Math.random,55,85);
+    f.hue = kind==='taxi'?48 : kind==='delivery'?140 : kind==='maintenance'?30 : 190;
+    f.speed = kind==='taxi'?11: kind==='delivery'?8:6;
+    f.pickNewTarget(this.span);
+    return f;
+  }
+
+  triggerEmergency(kind){
+    const v = this._spawnCar(kind);
+    v.sirenOn = true;
+    this.audio.siren(3.0+Math.random()*1.5);
+    return v;
+  }
+  triggerDeliveryDrone(){
+    const f = this._spawnFlyer('delivery');
+    this.audio.droneHum();
+    return f;
+  }
+
+  isGreen(axis){
+    const t = this.lightClock % this.lightPeriod;
+    const hGreen = t < this.hGreenWindow;
+    const hYellow = t>=this.hGreenWindow && t < this.hGreenWindow+0.6;
+    if(axis==='H') return hGreen;
+    // V green during the "other half" minus its own yellow
+    const vWindowStart = this.hGreenWindow+0.6;
+    const vGreenEnd = this.lightPeriod-0.6;
+    return t>=vWindowStart && t<vGreenEnd;
+  }
+
+  update(dt){
+    this.lightClock += dt;
+
+    // regroup lanes periodically for car-following checks
+    this.regroupTimer -= dt;
+    if(this.regroupTimer<=0){
+      this.regroupTimer = 0.35;
+      this.laneGroups.clear();
+      for(const v of this.cars.active){
+        if(!this.laneGroups.has(v.laneKey)) this.laneGroups.set(v.laneKey, []);
+        this.laneGroups.get(v.laneKey).push(v);
+      }
+      for(const arr of this.laneGroups.values()){
+        arr.sort((a,b)=> (a.dir>0? a.pos-b.pos : b.pos-a.pos));
+      }
+    }
+
+    let movingCount = 0;
+    for(const v of this.cars.active) if(v.speed>0.3) movingCount++;
+    this.trafficLoad = clamp(this.cars.active.length? 1-(movingCount/this.cars.active.length) : 0, 0,1);
+
+    for(const v of this.cars.active) this._updateVehicle(v, dt);
+    for(const p of this.peds.active) this._updatePed(p, dt);
+    for(const f of this.flyers.active) this._updateFlyer(f, dt);
+    for(const m of this.metros) m.update(dt, this.audio);
+
+    // dynamic spawn/despawn to match density target
+    const wantCars = Math.round(this.targetCars*this.density);
+    while(this.cars.active.length < wantCars) this._spawnCar();
+    while(this.cars.active.length > wantCars+2) this.cars.release(this.cars.active[0]);
+    const wantPeds = Math.round(this.targetPeds*this.density);
+    while(this.peds.active.length < wantPeds) this._spawnPed();
+    while(this.peds.active.length > wantPeds+2) this.peds.release(this.peds.active[0]);
+    const wantFly = Math.round(this.targetFlyers*this.density);
+    while(this.flyers.active.length < wantFly) this._spawnFlyer();
+    while(this.flyers.active.length > wantFly+2) this.flyers.release(this.flyers.active[0]);
+  }
+
+  _findIntersectionAhead(v){
+    // distance to nearest cross-line ahead along movement axis
+    const lines = v.laneAxis==='H' ? this.city.roadSegmentsV : this.city.roadSegmentsH;
+    let best = null, bestD = Infinity;
+    for(const line of lines){
+      const coord = v.laneAxis==='H' ? line.x : line.y;
+      const d = (coord - v.pos)*v.dir;
+      if(d>0.05 && d<bestD){ bestD=d; best=coord; }
+    }
+    return { dist: bestD, coord: best };
+  }
+
+  _updateVehicle(v, dt){
+    if(v.state==='parked'){
+      v.parkTimer -= dt;
+      if(v.parkTimer<=0) v.state='drive';
+      return;
+    }
+
+    const spec = VEHICLE_KINDS[v.kind];
+    let desiredSpeed = v.maxSpeed;
+
+    // car following
+    const group = this.laneGroups.get(v.laneKey);
+    if(group){
+      const idx = group.indexOf(v);
+      if(idx>0){
+        const ahead = group[idx-1];
+        const gap = (ahead.pos - v.pos)*v.dir;
+        if(gap>0 && gap<0.9){
+          const safeGap = 0.42;
+          const speedFactor = clamp((gap-0.12)/ (safeGap), 0, 1);
+          desiredSpeed = Math.min(desiredSpeed, ahead.speed + (desiredSpeed*speedFactor));
+          if(gap<0.16) desiredSpeed = 0;
+        }
+      }
+    }
+
+    // traffic light logic
+    if(!v.emergency){
+      const ahead = this._findIntersectionAhead(v);
+      if(ahead.coord!==null && ahead.dist < 0.75){
+        const green = this.isGreen(v.laneAxis);
+        if(!green && ahead.dist>0.05){
+          const stopBuffer = 0.28;
+          if(ahead.dist < stopBuffer+0.5){
+            const brakeFactor = clamp((ahead.dist-stopBuffer)/0.5, 0, 1);
+            desiredSpeed = Math.min(desiredSpeed, v.maxSpeed*brakeFactor);
+          }
+        }
+      }
+    } else {
+      // emergency vehicles slow slightly at reds but push through
+      const ahead = this._findIntersectionAhead(v);
+      if(ahead.coord!==null && ahead.dist<0.3 && !this.isGreen(v.laneAxis)) desiredSpeed = Math.min(desiredSpeed, v.maxSpeed*0.55);
+    }
+
+    v.speed = lerp(v.speed, desiredSpeed, dt*3.2);
+    v.speed = clamp(v.speed, 0, v.maxSpeed);
+    v.pos += v.dir*v.speed*dt;
+
+    // occasional turning at intersections
+    if(Math.random()<dt*0.15){
+      const ahead = this._findIntersectionAhead(v);
+      if(ahead.coord!==null && ahead.dist<0.4 && ahead.dist>0.15 && Math.random()<0.3){
+        // switch axis
+        const newAxis = v.laneAxis==='H'?'V':'H';
+        const newDir = Math.random()<0.5?1:-1;
+        v.lineCoord = v.laneAxis==='H' ? v.pos : v.lineCoord; // not exact but keeps flow
+        v.laneAxis = newAxis;
+        v.dir = newDir;
+        v.perp = (newDir>0?1:-1)*CITY.ROAD_HALF*0.5;
+        v.laneKey = newAxis+'_'+v.lineCoord.toFixed(2)+'_'+newDir;
+      }
+    }
+
+    // occasional parking for regular cars
+    if(v.kind==='car' && !v.emergency && Math.random()<dt*0.006){
+      v.state='parked'; v.parkTimer = randRange(Math.random,3,9); v.speed=0;
+    }
+
+    // wrap around city bounds
+    const span = this.span+1;
+    if(v.pos>span){ v.pos=-span; }
+    if(v.pos<-span){ v.pos=span; }
+  }
+
+  _updatePed(p, dt){
+    if(p.state==='wait'){
+      p.waitTimer -= dt;
+      if(p.waitTimer<=0) p.state='walk';
+      return;
+    }
+    p.pos += p.dir*p.speed*dt;
+    p.bob = Math.sin(p.phase + p.pos*8)*1;
+    if(Math.random()<dt*0.02){ p.state='wait'; p.waitTimer = randRange(Math.random,1,3); }
+    const span = this.span+0.5;
+    if(p.pos>span) p.pos=-span;
+    if(p.pos<-span) p.pos=span;
+  }
+
+  _updateFlyer(f, dt){
+    if(f.kind==='maintenance' || f.kind==='construction'){
+      f.bobPhase += dt;
+      f.z = f.tz + Math.sin(f.bobPhase*1.3)*1.5;
+      f.x += Math.sin(f.bobPhase*0.6)*0.02;
+      f.y += Math.cos(f.bobPhase*0.5)*0.02;
+      f.rotorPhase += dt*20;
+      return;
+    }
+    const dx = f.tx-f.x, dy = f.ty-f.y, dz = f.tz-f.z;
+    const dist = Math.hypot(dx,dy,dz);
+    if(dist<0.5){
+      f.pickNewTarget(this.span);
+    } else {
+      const sp = f.speed*dt;
+      f.x += (dx/dist)*sp; f.y += (dy/dist)*sp; f.z += (dz/dist)*sp;
+    }
+    f.bobPhase += dt*2;
+    f.rotorPhase += dt*25;
+    f.blinkPhase += dt*4;
+  }
+}
+
+/* ============================== RENDERER ============================== */
+class Renderer{
+  constructor(canvas, city, camera, particles, weather, lighting, traffic){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d', {alpha:false});
+    this.city = city; this.camera = camera; this.particles = particles;
+    this.weather = weather; this.lighting = lighting; this.traffic = traffic;
+    this.dpr = Math.min(window.devicePixelRatio||1, 2);
+    this.bloomEnabled = true;
+    this.splashEnabled = true;
+
+    this.bloomCanvas = document.createElement('canvas');
+    this.bloomCtx = this.bloomCanvas.getContext('2d');
+    this.bloomScale = 0.28;
+
+    this.time = 0;
+    // Cached per-frame rotation terms (recomputed once in render(), reused by every
+    // worldToScreen()/depth call this frame instead of recomputing trig per-vertex).
+    this.rotCos = 1; this.rotSin = 0;
+    this.depthA = 1; this.depthB = 1; // depthOf(x,y) = x*depthA + y*depthB
+    this.vitality = 1; // 0..1 city vitality, driven by CityGrowth; tints ground/roads/parks when low
+    this.resize();
+  }
+
+  resize(){
+    const w = window.innerWidth, h = window.innerHeight;
+    this.w = w; this.h = h;
+    this.canvas.width = Math.floor(w*this.dpr);
+    this.canvas.height = Math.floor(h*this.dpr);
+    this.canvas.style.width = w+'px';
+    this.canvas.style.height = h+'px';
+    this.bloomCanvas.width = Math.max(2,Math.floor(w*this.bloomScale));
+    this.bloomCanvas.height = Math.max(2,Math.floor(h*this.bloomScale));
+    this.particles.resize(w,h);
+  }
+
+  worldToScreen(x,y,z){
+    // Orbit rotation is applied to world x/y before isometric projection, so the whole
+    // city rotates rigidly around its own center (0,0) regardless of pan/zoom.
+    const rx = x*this.rotCos - y*this.rotSin;
+    const ry = x*this.rotSin + y*this.rotCos;
+    const p = ISO.project(rx,ry,z||0);
+    const cam = this.camera;
+    return {
+      sx: this.w/2 + cam.x + p.sx*cam.zoom,
+      sy: this.h/2 + cam.y + p.sy*cam.zoom
+    };
+  }
+  /* Cheap linear depth estimate in rotated space (equivalent to projecting (x,y) and reading
+     screen-depth order), used for painter's-algorithm sorting without a full worldToScreen call. */
+  depthOf(x,y){ return x*this.depthA + y*this.depthB; }
+
+  render(dt, uiState){
+    this.time += dt;
+    // Refresh the rotation cache once per frame from the camera's current orbit angle.
+    this.rotCos = Math.cos(this.camera.rot);
+    this.rotSin = Math.sin(this.camera.rot);
+    this.depthA = this.rotCos + this.rotSin;
+    this.depthB = this.rotCos - this.rotSin;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.scale(this.dpr, this.dpr);
+
+    const shake = this.camera.getShakeOffset();
+    ctx.translate(shake.x, shake.y);
+
+    this._drawSky(ctx);
+    this._drawGround(ctx);
+    this._drawSceneSorted(ctx);
+    this._drawFlyersAndMetro(ctx);
+    this._drawWeatherWorldEffects(ctx);
+
+    ctx.restore();
+
+    // Screen-space weather overlay (rain streaks / fog / dust) not affected by shake/dpr transforms oddly
+    ctx.save();
+    this.particles.drawScreenLayer(ctx, this.weather);
+    ctx.restore();
+
+    // Lightning flash
+    if(this.weather.flash>0){
+      ctx.save();
+      ctx.fillStyle = `rgba(220,230,255,${this.weather.flash*0.5})`;
+      ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+      ctx.restore();
+    }
+
+    if(this.bloomEnabled) this._applyBloom();
+
+    // vignette
+    this._drawVignette(ctx);
+  }
+
+  _drawSky(ctx){
+    const {top,bot} = this.lighting.skyColors();
+    const g = ctx.createLinearGradient(0,0,0,this.h);
+    g.addColorStop(0, `rgb(${top[0]},${top[1]},${top[2]})`);
+    g.addColorStop(1, `rgb(${bot[0]},${bot[1]},${bot[2]})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,this.w,this.h);
+
+    // stars at night
+    const dark = this.lighting.darkness();
+    if(dark>0.3){
+      ctx.save();
+      ctx.globalAlpha = smoothstep(0.3,0.9,dark);
+      const rng = this._starRng || (this._starRng = mulberry32(1337));
+      if(!this._stars){
+        this._stars = [];
+        for(let i=0;i<160;i++) this._stars.push({x:rng()*this.w, y:rng()*this.h*0.6, r:rng()*1.4+0.2, tw:rng()*10});
+      }
+      for(const s of this._stars){
+        const a = 0.4+0.6*Math.sin(this.time*2+s.tw);
+        ctx.fillStyle = `rgba(255,255,255,${Math.max(0,a)})`;
+        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Sun / moon glow disc
+    const sunF = this.lighting.sunFactor();
+    const discX = this.w*0.5 + sunF*this.w*0.32;
+    const discY = this.h*0.22 - Math.abs(sunF)*this.h*0.03 + (sunF<0? this.h*0.06:0);
+    const isDay = sunF>-0.1;
+    const rad = isDay? 30:22;
+    const col = isDay? '255,235,190' : '210,220,255';
+    const glow = ctx.createRadialGradient(discX,discY,0,discX,discY,rad*4);
+    glow.addColorStop(0, `rgba(${col},${isDay?0.55:0.35})`);
+    glow.addColorStop(1, `rgba(${col},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(discX,discY,rad*4,0,TAU); ctx.fill();
+    ctx.fillStyle = `rgba(${col},0.9)`;
+    ctx.beginPath(); ctx.arc(discX,discY,rad,0,TAU); ctx.fill();
+
+    // distant skyline silhouette haze
+    ctx.save();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = `rgb(${bot[0]*0.4|0},${bot[1]*0.4|0},${bot[2]*0.5|0})`;
+    ctx.fillRect(0, this.h*0.55, this.w, this.h*0.1);
+    ctx.restore();
+  }
+
+  _drawGround(ctx){
+    const span = this.city.citySpan+2;
+    // base ground plate
+    const dark = this.lighting.darkness();
+    const groundL = lerp(9, 3, dark);
+    const vit = this.vitality!==undefined?this.vitality:1;
+    const groundSat = lerp(14, 28, vit); // duller ground when the city has gone idle
+    ctx.save();
+    const corners = [
+      this.worldToScreen(-span,-span,0), this.worldToScreen(span,-span,0),
+      this.worldToScreen(span,span,0), this.worldToScreen(-span,span,0)
+    ];
+    ctx.fillStyle = `hsl(230,${groundSat.toFixed(1)}%,${groundL}%)`;
+    ctx.beginPath();
+    ctx.moveTo(corners[0].sx,corners[0].sy);
+    for(const c of corners.slice(1)) ctx.lineTo(c.sx,c.sy);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    this._drawRoads(ctx, dark);
+    this._drawParksAndPlazas(ctx, dark);
+    this._drawWater(ctx, dark);
+  }
+
+  _drawRoads(ctx, dark){
+    const rh = CITY.ROAD_HALF;
+    const vit = this.vitality!==undefined?this.vitality:1;
+    const laneAlphaMul = lerp(0.35, 1, vit); // neon lane markings fade/flicker out as vitality drops
+    ctx.save();
+    for(const line of this.city.roadSegmentsH){
+      const a = this.worldToScreen(line.x0, line.y-rh,0);
+      const b = this.worldToScreen(line.x1, line.y-rh,0);
+      const c = this.worldToScreen(line.x1, line.y+rh,0);
+      const d = this.worldToScreen(line.x0, line.y+rh,0);
+      ctx.fillStyle = `hsl(240,${(18*vit+4).toFixed(1)}%,${lerp(11,4,dark)}%)`;
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.lineTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.closePath(); ctx.fill();
+      // lane marking (neon center line)
+      const m1 = this.worldToScreen(line.x0, line.y,0.02);
+      const m2 = this.worldToScreen(line.x1, line.y,0.02);
+      ctx.strokeStyle = `hsla(190,100%,60%,${(0.18+dark*0.22)*laneAlphaMul})`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6,10]);
+      ctx.beginPath(); ctx.moveTo(m1.sx,m1.sy); ctx.lineTo(m2.sx,m2.sy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for(const line of this.city.roadSegmentsV){
+      const a = this.worldToScreen(line.x-rh, line.y0,0);
+      const b = this.worldToScreen(line.x-rh, line.y1,0);
+      const c = this.worldToScreen(line.x+rh, line.y1,0);
+      const d = this.worldToScreen(line.x+rh, line.y0,0);
+      ctx.fillStyle = `hsl(240,${(18*vit+4).toFixed(1)}%,${lerp(11,4,dark)}%)`;
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.lineTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.closePath(); ctx.fill();
+      const m1 = this.worldToScreen(line.x, line.y0,0.02);
+      const m2 = this.worldToScreen(line.x, line.y1,0.02);
+      ctx.strokeStyle = `hsla(190,100%,60%,${(0.18+dark*0.22)*laneAlphaMul})`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6,10]);
+      ctx.beginPath(); ctx.moveTo(m1.sx,m1.sy); ctx.lineTo(m2.sx,m2.sy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // intersection traffic lights
+    for(const inter of this.city.intersections){
+      const p = this.worldToScreen(inter.x, inter.y, 2.2);
+      const greenH = this.traffic.isGreen('H');
+      ctx.save();
+      ctx.translate(p.sx,p.sy);
+      const drawLamp = (dx,onColor)=>{
+        ctx.beginPath(); ctx.arc(dx,0,2.4*this.camera.zoom,0,TAU);
+        ctx.fillStyle = onColor; ctx.shadowColor=onColor; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0;
+      };
+      drawLamp(-3*this.camera.zoom, greenH? '#3dffb0':'#ff3d5a');
+      drawLamp(3*this.camera.zoom, !greenH? '#3dffb0':'#ff3d5a');
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  _drawParksAndPlazas(ctx, dark){
+    const vit = this.vitality!==undefined?this.vitality:1;
+    for(const pk of this.city.parks){
+      const a = this.worldToScreen(pk.cx-pk.r, pk.cy-pk.r,0.05);
+      const b = this.worldToScreen(pk.cx+pk.r, pk.cy-pk.r,0.05);
+      const c = this.worldToScreen(pk.cx+pk.r, pk.cy+pk.r,0.05);
+      const d = this.worldToScreen(pk.cx-pk.r, pk.cy+pk.r,0.05);
+      ctx.fillStyle = `hsl(${lerp(70,140,vit).toFixed(0)},${(45*vit+8).toFixed(1)}%,${lerp(16,7,dark)}%)`;
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.lineTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.closePath(); ctx.fill();
+      // simple procedural trees (canopy circles) with subtle glow bioluminescent accents
+      const rng = mulberry32(Math.floor(pk.treeSeed*1000));
+      const n = 5;
+      for(let i=0;i<n;i++){
+        const tx = pk.cx + randRange(rng,-pk.r*0.7,pk.r*0.7);
+        const ty = pk.cy + randRange(rng,-pk.r*0.7,pk.r*0.7);
+        const th = randRange(rng,1.6,3.2)*lerp(0.6,1,vit); // dead/idle trees shrink and droop
+        const p1 = this.worldToScreen(tx,ty,0);
+        const p2 = this.worldToScreen(tx,ty,th);
+        ctx.strokeStyle = `hsl(30,20%,${lerp(20,10,dark)}%)`;
+        ctx.lineWidth = 1.6*this.camera.zoom;
+        ctx.beginPath(); ctx.moveTo(p1.sx,p1.sy); ctx.lineTo(p2.sx,p2.sy); ctx.stroke();
+        const cr = randRange(rng,4,7)*this.camera.zoom*lerp(0.55,1,vit);
+        const canopyHue = lerp(28, 140+dark*20, vit); // brown & bare when idle, lush green when thriving
+        ctx.fillStyle = `hsl(${canopyHue.toFixed(0)},${(55*vit+10).toFixed(1)}%,${lerp(28,14,dark)}%)`;
+        ctx.beginPath(); ctx.arc(p2.sx,p2.sy,cr,0,TAU); ctx.fill();
+        if(dark>0.4 && vit>0.35){
+          ctx.fillStyle = `hsla(150,100%,65%,${(dark-0.4)*0.5*vit})`;
+          ctx.beginPath(); ctx.arc(p2.sx,p2.sy,cr*0.4,0,TAU); ctx.fill();
+        }
+      }
+    }
+    for(const pl of this.city.plazas){
+      const r = 0.85;
+      const a = this.worldToScreen(pl.cx-r, pl.cy-r,0.03);
+      const b = this.worldToScreen(pl.cx+r, pl.cy-r,0.03);
+      const c = this.worldToScreen(pl.cx+r, pl.cy+r,0.03);
+      const d = this.worldToScreen(pl.cx-r, pl.cy+r,0.03);
+      ctx.fillStyle = `hsl(230,15%,${lerp(15,6,dark)}%)`;
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.lineTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.closePath(); ctx.fill();
+      if(pl.hasHologram){
+        const p = this.worldToScreen(pl.cx,pl.cy, 3+Math.sin(this.time*1.5)*0.4);
+        const hh = 5+Math.sin(this.time*2)*0.6;
+        const grd = ctx.createLinearGradient(p.sx,p.sy-hh*8*this.camera.zoom,p.sx,p.sy);
+        grd.addColorStop(0, hslStr(pl.hologramHue,100,65,0));
+        grd.addColorStop(1, hslStr(pl.hologramHue,100,65,0.35));
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.ellipse(p.sx,p.sy,7*this.camera.zoom,14*this.camera.zoom,0,0,TAU); ctx.fill();
+        ctx.strokeStyle = hslStr(pl.hologramHue,100,70,0.5);
+        ctx.beginPath(); ctx.ellipse(p.sx,p.sy,7*this.camera.zoom,3*this.camera.zoom,0,0,TAU); ctx.stroke();
+      }
+      if(pl.hasFountain){
+        const p = this.worldToScreen(pl.cx,pl.cy,0.1);
+        ctx.fillStyle = `hsla(195,90%,70%,0.5)`;
+        ctx.beginPath(); ctx.arc(p.sx,p.sy,10*this.camera.zoom,0,TAU); ctx.fill();
+      }
+    }
+  }
+
+  _drawWater(ctx, dark){
+    if(!this.city.waterTiles.length) return;
+    const t = this.time;
+    for(const wt of this.city.waterTiles){
+      const r = CITY.PITCH*0.5;
+      const a = this.worldToScreen(wt.cx-r, wt.cy-r*0.55, -0.4);
+      const b = this.worldToScreen(wt.cx+r, wt.cy-r*0.55, -0.4);
+      const c = this.worldToScreen(wt.cx+r, wt.cy+r*0.55, -0.4);
+      const d = this.worldToScreen(wt.cx-r, wt.cy+r*0.55, -0.4);
+      const g = ctx.createLinearGradient(a.sx,a.sy,d.sx,d.sy);
+      g.addColorStop(0, `hsla(200,70%,${lerp(20,8,dark)}%,1)`);
+      g.addColorStop(1, `hsla(280,60%,${lerp(16,6,dark)}%,1)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.lineTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.closePath(); ctx.fill();
+      // shimmering reflection streaks
+      ctx.save();
+      ctx.globalAlpha = 0.35+dark*0.25;
+      for(let i=0;i<5;i++){
+        const off = Math.sin(t*0.8+i*1.7)*0.5+0.5;
+        const rx = lerp(a.sx,b.sx, (i+off)/5);
+        ctx.strokeStyle = i%2===0? 'rgba(78,242,255,0.5)':'rgba(255,62,200,0.4)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(rx,a.sy+4); ctx.lineTo(rx+8,d.sy-4); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  /* The box's "near" corner (the one closest to the camera in screen depth) shifts as the city
+     orbits. Deriving it from the cached rotation terms keeps both depth-sorting and which two
+     side faces get drawn correct through the full 360°, instead of hardcoding +x/+y like a
+     fixed-azimuth isometric view would. At rot=0 this reduces exactly to the original x1/y1 corner. */
+  _buildingNearCorner(b){
+    const xNear = this.depthA>=0 ? b.x1 : b.x0, xFar = this.depthA>=0 ? b.x0 : b.x1;
+    const yNear = this.depthB>=0 ? b.y1 : b.y0, yFar = this.depthB>=0 ? b.y0 : b.y1;
+    return {xNear,xFar,yNear,yFar};
+  }
+  _buildingNearDepth(b){
+    return Math.max(b.x0*this.depthA,b.x1*this.depthA) + Math.max(b.y0*this.depthB,b.y1*this.depthB);
+  }
+
+  _drawBuilding(ctx, b, dark){
+    const zoom = this.camera.zoom;
+    const H = b.displayHeight!==undefined ? b.displayHeight : b.height;
+    const {xNear,xFar,yNear,yFar} = this._buildingNearCorner(b);
+    const top = this.worldToScreen(xFar,yFar,H);
+    const t2  = this.worldToScreen(xNear,yFar,H);
+    const t3  = this.worldToScreen(xNear,yNear,H);
+    const t4  = this.worldToScreen(xFar,yNear,H);
+    const bx1 = this.worldToScreen(xNear,yFar,0);
+    const bx3 = this.worldToScreen(xNear,yNear,0);
+    const by4 = this.worldToScreen(xFar,yNear,0);
+
+    // City-growth vitality: abandoned buildings read duller, darker, and less lit; thriving
+    // buildings (freshly grown / upgraded tiers) read brighter and more saturated.
+    const abandon = b.abandonVisual||0;
+    const tierGlow = b.tier ? clamp(b.tier*0.06,0,0.3) : 0;
+    const matL = b.matVal * (1 - abandon*0.55) + tierGlow*4;
+    const satMul = 1 - abandon*0.65;
+
+    const flicker = (b.flickerBuilding || abandon>0.45) && (Math.sin(this.time*23+b.flickerPhase) > 0.85 - abandon*0.45);
+    const powerOut = uiGlobals.powerOutageActive && uiGlobals.powerOutageZone && Math.hypot(b.cx-uiGlobals.powerOutageZone.x,b.cy-uiGlobals.powerOutageZone.y) < uiGlobals.powerOutageZone.r;
+    const litFactor = (dark>0.25 && !flicker && !powerOut) ? Math.max(0,1-abandon*0.9) : 0;
+
+    // Level-of-detail: cap window draw cost based on the building's apparent screen height.
+    const screenH = H*zoom;
+    const lod = screenH<14 ? 0 : screenH<38 ? 1 : screenH<85 ? 2 : 3;
+
+    const sat = (b.satBase!==undefined?b.satBase:26) * satMul;
+
+    ctx.beginPath();
+    ctx.moveTo(t2.sx,t2.sy); ctx.lineTo(t3.sx,t3.sy); ctx.lineTo(bx3.sx,bx3.sy); ctx.lineTo(bx1.sx,bx1.sy); ctx.closePath();
+    let gradR = ctx.createLinearGradient(t2.sx,t2.sy,bx1.sx,bx1.sy);
+    gradR.addColorStop(0, `hsl(${b.hue},${sat.toFixed(1)}%,${matL+5}%)`);
+    gradR.addColorStop(1, `hsl(${b.hue},${sat.toFixed(1)}%,${Math.max(4,matL-4)}%)`);
+    ctx.fillStyle = gradR; ctx.fill();
+    this._drawWindowsOnFace(ctx, b, t2,t3,bx3,bx1, litFactor, 0, lod);
+
+    ctx.beginPath();
+    ctx.moveTo(t3.sx,t3.sy); ctx.lineTo(t4.sx,t4.sy); ctx.lineTo(by4.sx,by4.sy); ctx.lineTo(bx3.sx,bx3.sy); ctx.closePath();
+    let gradF = ctx.createLinearGradient(t3.sx,t3.sy,by4.sx,by4.sy);
+    gradF.addColorStop(0, `hsl(${b.hue2},${(sat*0.9).toFixed(1)}%,${matL+2}%)`);
+    gradF.addColorStop(1, `hsl(${b.hue2},${(sat*0.9).toFixed(1)}%,${Math.max(4,matL-6)}%)`);
+    ctx.fillStyle = gradF; ctx.fill();
+    this._drawWindowsOnFace(ctx, b, t3,t4,by4,bx3, litFactor, 1, lod);
+
+    ctx.beginPath();
+    ctx.moveTo(top.sx,top.sy); ctx.lineTo(t2.sx,t2.sy); ctx.lineTo(t3.sx,t3.sy); ctx.lineTo(t4.sx,t4.sy); ctx.closePath();
+    ctx.fillStyle = `hsl(${b.hue},${(sat*0.7).toFixed(1)}%,${Math.min(48,matL+14)}%)`;
+    ctx.fill();
+    ctx.strokeStyle = `hsla(${b.hue},70%,68%,${0.22*(1-abandon*0.6)})`; ctx.lineWidth=1; ctx.stroke();
+
+    // Thin glowing edge/metallic-trim highlight on the near vertical corner — cheap (one
+    // stroke) but reads as a premium accent strip catching the light.
+    if(lod>=1 && litFactor>0){
+      ctx.beginPath(); ctx.moveTo(t3.sx,t3.sy); ctx.lineTo(bx3.sx,bx3.sy);
+      ctx.strokeStyle = hslStr(b.hue,85,72,0.35*(1-abandon*0.7));
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    if(lod>0) this._drawRoofProps(ctx, b, dark, H);
+
+    if(b.hasBillboardWall && litFactor && lod>=1){
+      this._drawBillboard(ctx, b, t2,bx1);
+    }
+
+    // Decay dressing: soot streak + graffiti-like dark blotches once a building has clearly
+    // slipped into an abandoned state (kept cheap: two flat shapes, no extra geometry passes).
+    if(abandon>0.4 && lod>=1){
+      ctx.save();
+      ctx.globalAlpha = (abandon-0.4)*0.8;
+      ctx.fillStyle = 'rgba(20,18,16,0.6)';
+      const gx = lerp(t2.sx,bx1.sx,0.55), gy = lerp(t2.sy,bx1.sy,0.55);
+      ctx.beginPath(); ctx.ellipse(gx,gy, 6*zoom, 10*zoom, 0.3, 0, TAU); ctx.fill();
+      ctx.fillStyle = `hsla(${(b.winSeed%360)},70%,45%,0.35)`;
+      const rx = lerp(t3.sx,bx3.sx,0.72), ry = lerp(t3.sy,bx3.sy,0.72);
+      ctx.fillRect(rx-3*zoom, ry-1.4*zoom, 6*zoom, 2.8*zoom);
+      ctx.restore();
+    }
+
+    // Cinematic construction FX while this building/lot is actively rising.
+    if(b.constructing) this._drawConstructionFX(ctx, b, xNear,xFar,yNear,yFar);
+  }
+
+  _drawWindowsOnFace(ctx, b, pA,pB,pC,pD, litFactor, faceIdx, lod){
+    const rows = b.floors;
+    const cols = b.winCols;
+
+    if(lod===0){
+      // Too small on screen for individual windows — draw a handful of glow flecks to suggest life.
+      if(litFactor){
+        const n = 3;
+        for(let i=0;i<n;i++){
+          const u = 0.2+0.6*((b.winSeed*(i+3))%97)/97;
+          const v = 0.15+0.7*((b.winSeed*(i+7))%89)/89;
+          const x = lerp(lerp(pA.sx,pB.sx,u), lerp(pD.sx,pC.sx,u), v);
+          const y = lerp(lerp(pA.sy,pB.sy,u), lerp(pD.sy,pC.sy,u), v);
+          const flHue = WINDOW_HUES[Math.floor((b.winSeed+i*13)%WINDOW_HUES.length)];
+          ctx.fillStyle = hslStr(flHue,90,70,0.65);
+          ctx.fillRect(x-0.6,y-0.6,1.2,1.2);
+        }
+      }
+      return;
+    }
+
+    // Row/column stride scales with LOD so distant buildings cost far fewer draw calls
+    const capRows = lod===1?10 : lod===2?22 : 999;
+    const capCols = lod===1?3  : lod===2?5  : 999;
+    const rowStep = Math.max(1, Math.ceil(rows/capRows));
+    const colStep = Math.max(1, Math.ceil(cols/capCols));
+    if((rows/rowStep)*(cols/colStep) > 1100) return;
+
+    for(let f=0; f<rows; f+=rowStep){
+      const v0 = f/rows, v1=(f+0.78*rowStep)/rows;
+      const rowTopL = { x: lerp(pA.sx,pD.sx,v0), y: lerp(pA.sy,pD.sy,v0) };
+      const rowTopR = { x: lerp(pB.sx,pC.sx,v0), y: lerp(pB.sy,pC.sy,v0) };
+      const rowBotL = { x: lerp(pA.sx,pD.sx,v1), y: lerp(pA.sy,pD.sy,v1) };
+      const rowBotR = { x: lerp(pB.sx,pC.sx,v1), y: lerp(pB.sy,pC.sy,v1) };
+      for(let c=0;c<cols;c+=colStep){
+        const u0 = (c+0.14)/cols, u1=(c+0.86*colStep)/cols;
+        const x0 = lerp(rowTopL.x,rowTopR.x,u0), y0 = lerp(rowTopL.y,rowTopR.y,u0);
+        const x1 = lerp(rowTopL.x,rowTopR.x,u1), y1 = lerp(rowTopL.y,rowTopR.y,u1);
+        const x2 = lerp(rowBotL.x,rowBotR.x,u1), y2 = lerp(rowBotL.y,rowBotR.y,u1);
+        const x3 = lerp(rowBotL.x,rowBotR.x,u0), y3 = lerp(rowBotL.y,rowBotR.y,u0);
+        const stateIdx = f % b.windowStates.length;
+        const litBase = b.windowStates[stateIdx][ (c+faceIdx*cols) % b.windowStates[stateIdx].length ];
+        const isLit = litFactor && litBase;
+        if(isLit){
+          const twinkle = 0.85+0.15*Math.sin(this.time*3+f*0.7+c*1.3);
+          const wHue = WINDOW_HUES[(b.winSeed + f*131 + c*17 + faceIdx*7) % WINDOW_HUES.length];
+          const wBright = 62 + ((b.winSeed + f*7 + c*3) % 13); // slight per-window brightness randomization
+          ctx.fillStyle = hslStr(wHue, 92, wBright, 0.85*twinkle);
+        } else {
+          ctx.fillStyle = `hsla(${b.hue2},26%,${litFactor?10:15}%,0.55)`;
+        }
+        ctx.beginPath();
+        ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.lineTo(x3,y3); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    if(b.hasElevatorGlass && lod>=2){
+      const ephase = (this.time*b.elevatorSpeed + b.elevatorPhase) % 2;
+      const ev = ephase<1? ephase : 2-ephase;
+      const ex = lerp(pA.sx,pD.sx, clamp(ev,0,1)*0.9+0.05);
+      const ey = lerp(pA.sy,pD.sy, clamp(ev,0,1)*0.9+0.05);
+      ctx.fillStyle = 'rgba(180,230,255,0.8)';
+      ctx.beginPath(); ctx.arc(ex,ey,2.2,0,TAU); ctx.fill();
+    }
+  }
+
+  _drawBillboard(ctx, b, topCorner, botCorner){
+    const midX = (topCorner.sx+botCorner.sx)/2 + 6*this.camera.zoom;
+    const midY = (topCorner.sy+botCorner.sy)/2;
+    const w = 16*this.camera.zoom, h = 10*this.camera.zoom;
+    const hueShift = (this.time*40 + b.billboardSeed*30) % 360;
+    ctx.save();
+    ctx.fillStyle = hslStr(hueShift, 90, 55, 0.85);
+    ctx.shadowColor = hslStr(hueShift,100,60,1); ctx.shadowBlur = 14;
+    ctx.fillRect(midX-w/2, midY-h/2, w, h);
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.strokeRect(midX-w/2,midY-h/2,w,h);
+    const bw = w*0.6;
+    const bx = midX-w/2 + ((this.time*20+b.billboardSeed*50) % (w+bw)) - bw;
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.fillRect(clamp(bx,midX-w/2,midX+w/2-2), midY-1, Math.min(bw, midX+w/2-bx), 2);
+    ctx.restore();
+  }
+
+  _drawRoofProps(ctx, b, dark, heightOverride){
+    const zoom = this.camera.zoom;
+    const H = heightOverride!==undefined ? heightOverride : (b.displayHeight!==undefined?b.displayHeight:b.height);
+    const top = this.worldToScreen(b.cx,b.cy,H);
+    switch(b.roofType){
+      case 'antenna': {
+        const tip = this.worldToScreen(b.cx,b.cy,H+9);
+        ctx.strokeStyle='rgba(200,210,220,0.8)'; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(top.sx,top.sy); ctx.lineTo(tip.sx,tip.sy); ctx.stroke();
+        const blink = Math.sin(this.time*3)>0.6;
+        ctx.fillStyle = blink? 'rgba(255,60,60,1)':'rgba(120,20,20,0.6)';
+        ctx.beginPath(); ctx.arc(tip.sx,tip.sy,2.2,0,TAU); ctx.fill();
+        if(blink){ ctx.fillStyle='rgba(255,80,80,0.35)'; ctx.beginPath(); ctx.arc(tip.sx,tip.sy,6,0,TAU); ctx.fill(); }
+        break;
+      }
+      case 'helipad': {
+        ctx.save();
+        ctx.strokeStyle='rgba(255,210,80,0.85)'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.ellipse(top.sx,top.sy,9*zoom,4.5*zoom,0,0,TAU); ctx.stroke();
+        ctx.font=`${8*zoom}px sans-serif`; ctx.fillStyle='rgba(255,210,80,0.85)'; ctx.textAlign='center';
+        ctx.fillText('H', top.sx, top.sy+3*zoom);
+        ctx.restore();
+        break;
+      }
+      case 'garden': {
+        for(let i=0;i<4;i++){
+          const ang = i*1.6;
+          const gx = top.sx+Math.cos(ang)*7*zoom, gy = top.sy+Math.sin(ang)*3.4*zoom;
+          ctx.fillStyle = `hsl(${130+i*5},50%,${dark>0.4?18:30}%)`;
+          ctx.beginPath(); ctx.arc(gx,gy,3*zoom,0,TAU); ctx.fill();
+        }
+        break;
+      }
+      case 'solar': {
+        ctx.fillStyle='rgba(40,60,110,0.85)';
+        ctx.fillRect(top.sx-8*zoom, top.sy-4*zoom, 16*zoom, 6*zoom);
+        ctx.strokeStyle='rgba(120,160,255,0.5)'; ctx.lineWidth=0.6;
+        for(let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(top.sx-8*zoom+i*4*zoom, top.sy-4*zoom); ctx.lineTo(top.sx-8*zoom+i*4*zoom, top.sy+2*zoom); ctx.stroke(); }
+        break;
+      }
+      case 'tanks': {
+        for(let i=-1;i<=1;i+=2){
+          const tx = top.sx+i*5*zoom, ty = top.sy;
+          ctx.fillStyle='rgba(90,95,100,0.9)';
+          ctx.beginPath(); ctx.ellipse(tx,ty,3*zoom,4*zoom,0,0,TAU); ctx.fill();
+        }
+        break;
+      }
+      case 'billboard': {
+        this._drawBillboard(ctx, b, {sx:top.sx-6*zoom,sy:top.sy-14*zoom}, {sx:top.sx-6*zoom,sy:top.sy});
+        break;
+      }
+      case 'spire': {
+        const tip = this.worldToScreen(b.cx,b.cy,H+22);
+        const grad = ctx.createLinearGradient(top.sx,top.sy,tip.sx,tip.sy);
+        grad.addColorStop(0, `hsla(${b.hue},80%,60%,0.9)`);
+        grad.addColorStop(1, `hsla(${b.hue},100%,75%,0.1)`);
+        ctx.strokeStyle = grad; ctx.lineWidth=2.4*zoom;
+        ctx.beginPath(); ctx.moveTo(top.sx,top.sy); ctx.lineTo(tip.sx,tip.sy); ctx.stroke();
+        break;
+      }
+    }
+    if(b.hasAC){
+      ctx.fillStyle='rgba(60,65,72,0.9)';
+      ctx.fillRect(top.sx+4*zoom, top.sy+2*zoom, 5*zoom, 3*zoom);
+    }
+  }
+
+  /* Cinematic construction sequence: buildings never simply pop in or resize instantly.
+     While b.constructing is true this draws a holographic wireframe blueprint of the target
+     footprint, a glowing foundation ring, a simple crane silhouette, and an upward scanning
+     light band — layered over the building mesh which is itself growing via displayHeight. */
+  _drawConstructionFX(ctx, b, xNear,xFar,yNear,yFar){
+    const target = b.targetHeight!==undefined ? b.targetHeight : b.height;
+    const cur = b.displayHeight!==undefined ? b.displayHeight : b.height;
+    const zoom = this.camera.zoom;
+    const hue = 190;
+
+    // Holographic blueprint outline of the final footprint, up to the target height.
+    const bt = this.worldToScreen(xFar,yFar,target), bt2 = this.worldToScreen(xNear,yFar,target);
+    const bt3 = this.worldToScreen(xNear,yNear,target), bt4 = this.worldToScreen(xFar,yNear,target);
+    const gb1 = this.worldToScreen(xNear,yFar,0), gb3 = this.worldToScreen(xNear,yNear,0), gb4 = this.worldToScreen(xFar,yNear,0), gb0 = this.worldToScreen(xFar,yFar,0);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = hslStr(hue,100,70,0.55);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,4]);
+    ctx.beginPath();
+    ctx.moveTo(bt.sx,bt.sy); ctx.lineTo(bt2.sx,bt2.sy); ctx.lineTo(bt3.sx,bt3.sy); ctx.lineTo(bt4.sx,bt4.sy); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bt.sx,bt.sy); ctx.lineTo(gb0.sx,gb0.sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bt2.sx,bt2.sy); ctx.lineTo(gb1.sx,gb1.sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bt3.sx,bt3.sy); ctx.lineTo(gb3.sx,gb3.sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bt4.sx,bt4.sy); ctx.lineTo(gb4.sx,gb4.sy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Glowing foundation ring, pulsing gently.
+    const pulse = 0.5+0.5*Math.sin(this.time*5);
+    ctx.save();
+    ctx.globalAlpha = 0.4+pulse*0.25;
+    const g = ctx.createRadialGradient(gb1.sx,gb1.sy,0, (gb1.sx+gb3.sx)/2,(gb1.sy+gb3.sy)/2, 20*zoom);
+    g.addColorStop(0, hslStr(hue,100,65,0.5));
+    g.addColorStop(1, hslStr(hue,100,65,0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(gb0.sx,gb0.sy); ctx.lineTo(gb1.sx,gb1.sy); ctx.lineTo(gb3.sx,gb3.sy); ctx.lineTo(gb4.sx,gb4.sy); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Upward scanning band sweeping the rising structure.
+    const scanV = (this.time*0.7) % 1;
+    const scanH = lerp(0, target, scanV);
+    if(cur > scanH*0.85){
+      const s1 = this.worldToScreen(xNear,yFar,scanH), s2 = this.worldToScreen(xNear,yNear,scanH);
+      ctx.save();
+      ctx.strokeStyle = hslStr(hue,100,75,0.5*(1-scanV*0.6));
+      ctx.lineWidth = 1.6*zoom;
+      ctx.shadowColor = hslStr(hue,100,70,1); ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(s1.sx,s1.sy); ctx.lineTo(s2.sx,s2.sy); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    // Simple crane silhouette planted beside the lot.
+    const craneBase = this.worldToScreen(xFar-0.6, yFar-0.6, 0);
+    const craneTop = this.worldToScreen(xFar-0.6, yFar-0.6, Math.max(target,cur)+7);
+    const craneArmEnd = this.worldToScreen(xFar-0.6+2.4, yFar-0.6, Math.max(target,cur)+7);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(200,210,220,0.65)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(craneBase.sx,craneBase.sy); ctx.lineTo(craneTop.sx,craneTop.sy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(craneTop.sx,craneTop.sy); ctx.lineTo(craneArmEnd.sx,craneArmEnd.sy); ctx.stroke();
+    const blink = Math.sin(this.time*8)>0.4;
+    ctx.fillStyle = blink? 'rgba(255,60,60,0.95)' : 'rgba(120,20,20,0.4)';
+    ctx.beginPath(); ctx.arc(craneTop.sx,craneTop.sy,1.8,0,TAU); ctx.fill();
+    // hook cable + swaying load
+    const hookY = lerp(craneArmEnd.sy, craneBase.sy, 0.3+0.08*Math.sin(this.time*2));
+    ctx.strokeStyle = 'rgba(200,210,220,0.4)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(craneArmEnd.sx,craneArmEnd.sy); ctx.lineTo(craneArmEnd.sx,hookY); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,160,170,0.6)';
+    ctx.fillRect(craneArmEnd.sx-2.5,hookY,5,4);
+    ctx.restore();
+
+    // Rising construction light flecks (dust/sparks) — sourced from the shared particle pool
+    // so cost stays bounded by the same budget as every other world particle in the scene.
+    b._fxTimer = (b._fxTimer||0) - 0.016;
+    if(b._fxTimer<=0){
+      b._fxTimer = 0.09;
+      const px = lerp(xFar,xNear, Math.random()), py = lerp(yFar,yNear, Math.random());
+      if(Math.random()<0.6){
+        this.particles.spawnWorld('sparkle', px,py, cur*Math.random(), {hue:45, maxLife:0.7, size:2.5, flicker:true, vz:randRange(Math.random,3,7)});
+      } else {
+        this.particles.spawnWorld('smoke', px,py, 0.2, {size:3,maxLife:1.6,growth:4,alpha:0.25});
+      }
+    }
+  }
+
+  _drawVehicle(ctx, v, dark){
+    const wp = v.worldPos();
+    const p = this.worldToScreen(wp.x,wp.y, 0.35);
+    const zoom = this.camera.zoom;
+    const spec = VEHICLE_KINDS[v.kind];
+    const len = spec.len*zoom*46, wid = spec.wid*zoom*46;
+
+    ctx.save();
+    ctx.translate(p.sx,p.sy);
+    const bodyHue = v.kind==='car'? v.hue : spec.hue;
+    ctx.fillStyle = hslStr(bodyHue, v.kind==='car'?55:70, dark>0.4?42:52, 0.95);
+    ctx.beginPath();
+    ctx.ellipse(0,0, Math.max(len,4), Math.max(wid,2.4), 0,0,TAU);
+    ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=0.6; ctx.stroke();
+
+    const lightOffset = Math.max(len,4)*0.85;
+    const dxh0 = v.laneAxis==='H'? v.dir : 0;
+    const dyh0 = v.laneAxis==='V'? v.dir : 0;
+    // World-space direction vector rotated to match the current camera orbit angle.
+    const dxh = dxh0*this.rotCos - dyh0*this.rotSin;
+    const dyh = dxh0*this.rotSin + dyh0*this.rotCos;
+    ctx.fillStyle='rgba(255,255,230,0.95)';
+    ctx.beginPath(); ctx.arc(dxh*lightOffset*0.6, dyh*lightOffset*0.6, 1.4,0,TAU); ctx.fill();
+    if(dark>0.25){
+      ctx.fillStyle='rgba(255,60,50,0.9)';
+      ctx.beginPath(); ctx.arc(-dxh*lightOffset*0.6, -dyh*lightOffset*0.6, 1.2,0,TAU); ctx.fill();
+    }
+
+    if(v.emergency && v.sirenOn){
+      const blink = Math.sin(this.time*14)>0;
+      ctx.fillStyle = blink? 'rgba(255,40,40,0.95)':'rgba(40,80,255,0.95)';
+      ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur=10;
+      ctx.beginPath(); ctx.arc(0,-wid*0.8,1.6,0,TAU); ctx.fill();
+      ctx.shadowBlur=0;
+    }
+    ctx.restore();
+
+    if(this.weather.puddle>0.15 && dark>0.2){
+      ctx.save();
+      ctx.globalAlpha = this.weather.puddle*0.25;
+      ctx.fillStyle = hslStr(bodyHue,80,60,1);
+      ctx.beginPath(); ctx.ellipse(p.sx,p.sy+len*0.5, len*0.6, wid*0.3,0,0,TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  _drawPedestrian(ctx, p, dark){
+    const wp = p.worldPos();
+    const scr = this.worldToScreen(wp.x,wp.y, 0.55+Math.abs(p.bob)*0.05);
+    const zoom = this.camera.zoom;
+    ctx.save();
+    ctx.translate(scr.sx,scr.sy);
+    ctx.fillStyle = dark>0.4 ? hslStr(p.hue,50,55,0.9) : hslStr(p.hue,45,42,0.9);
+    ctx.beginPath(); ctx.arc(0,0, Math.max(1.6,1.8*zoom),0,TAU); ctx.fill();
+    if(dark>0.35){
+      ctx.fillStyle='rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.arc(0,-1,0.8*zoom,0,TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  _drawSceneSorted(ctx){
+    const dark = this.lighting.darkness();
+    const items = [];
+    const margin = 140;
+    const inView = (sx,sy)=> sx>-margin && sx<this.w+margin && sy>-margin*2 && sy<this.h+margin;
+
+    for(const b of this.city.buildings){
+      const c = this.worldToScreen(b.cx,b.cy,(b.displayHeight!==undefined?b.displayHeight:b.height)*0.4);
+      if(!inView(c.sx,c.sy)) continue;
+      items.push({depth:this._buildingNearDepth(b), draw:()=>this._drawBuilding(ctx,b,dark)});
+    }
+    for(const v of this.traffic.cars.active){
+      const wp=v.worldPos();
+      const s = this.worldToScreen(wp.x,wp.y,0.3);
+      if(!inView(s.sx,s.sy)) continue;
+      items.push({depth:this.depthOf(wp.x,wp.y)-0.3, draw:()=>this._drawVehicle(ctx,v,dark)});
+    }
+    for(const p of this.traffic.peds.active){
+      const wp=p.worldPos();
+      const s = this.worldToScreen(wp.x,wp.y,0.3);
+      if(!inView(s.sx,s.sy)) continue;
+      items.push({depth:this.depthOf(wp.x,wp.y)-0.3, draw:()=>this._drawPedestrian(ctx,p,dark)});
+    }
+    items.sort((a,b)=>a.depth-b.depth);
+    for(const it of items) it.draw();
+  }
+
+  _drawFlyersAndMetro(ctx){
+    const dark = this.lighting.darkness();
+    // Metro elevated track rail
+    const track = this.city.metroTrack;
+    const ra = this.worldToScreen(track.x0, track.y, track.z);
+    const rb = this.worldToScreen(track.x1, track.y, track.z);
+    ctx.save();
+    ctx.strokeStyle = `hsla(200,20%,${lerp(45,25,dark)}%,0.6)`;
+    ctx.lineWidth = 2.4*this.camera.zoom;
+    ctx.beginPath(); ctx.moveTo(ra.sx,ra.sy); ctx.lineTo(rb.sx,rb.sy); ctx.stroke();
+    // support pylons
+    for(let i=-1;i<=1;i++){
+      const wx = i*this.city.citySpan*0.5;
+      const top = this.worldToScreen(wx, track.y, track.z);
+      const bot = this.worldToScreen(wx, track.y, 0);
+      ctx.strokeStyle = `rgba(120,140,160,0.35)`; ctx.lineWidth=1.4*this.camera.zoom;
+      ctx.beginPath(); ctx.moveTo(top.sx,top.sy); ctx.lineTo(bot.sx,bot.sy); ctx.stroke();
+    }
+    for(const st of track.stations){
+      const p = this.worldToScreen(st.x, st.y, track.z);
+      ctx.fillStyle = 'rgba(78,242,255,0.5)';
+      ctx.fillRect(p.sx-10*this.camera.zoom, p.sy-4*this.camera.zoom, 20*this.camera.zoom, 4*this.camera.zoom);
+    }
+    ctx.restore();
+
+    // Flying units, sorted by depth roughly
+    const flyItems = [];
+    for(const f of this.traffic.flyers.active) flyItems.push(f);
+    flyItems.sort((a,b)=>this.depthOf(a.x,a.y)-this.depthOf(b.x,b.y));
+    for(const f of flyItems) this._drawFlyer(ctx, f, dark);
+
+    for(const m of this.traffic.metros) this._drawMetroTrain(ctx, m, dark);
+  }
+
+  _drawMetroTrain(ctx, m, dark){
+    const track = m.track;
+    const zoom = this.camera.zoom;
+    const carLen = 1.1;
+    for(let i=0;i<m.cars;i++){
+      const cpos = m.pos - m.dir*i*carLen;
+      const p = this.worldToScreen(cpos, track.y, track.z+3);
+      ctx.save();
+      ctx.translate(p.sx,p.sy);
+      ctx.fillStyle = `hsl(200,70%,${lerp(55,35,dark)}%)`;
+      ctx.fillRect(-carLen*ISO.tileW*zoom*0.5, -4*zoom, carLen*ISO.tileW*zoom, 8*zoom);
+      ctx.fillStyle = 'rgba(180,230,255,0.6)';
+      for(let w=0;w<3;w++){
+        ctx.fillRect(-carLen*ISO.tileW*zoom*0.5+4*zoom+w*8*zoom, -2*zoom, 4*zoom, 4*zoom);
+      }
+      ctx.restore();
+    }
+  }
+
+  _drawFlyer(ctx, f, dark){
+    const p = this.worldToScreen(f.x,f.y,f.z + Math.sin(f.bobPhase)*0.6);
+    const zoom = this.camera.zoom;
+    ctx.save();
+    ctx.translate(p.sx,p.sy);
+
+    // shadow on ground
+    const gp = this.worldToScreen(f.x,f.y,0);
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle='#000';
+    ctx.beginPath(); ctx.ellipse(gp.sx-p.sx, gp.sy-p.sy, 6*zoom, 3*zoom, 0,0,TAU); ctx.fill();
+    ctx.restore();
+
+    if(f.kind==='taxi'){
+      ctx.fillStyle = hslStr(f.hue,80,55,0.95);
+      ctx.beginPath(); ctx.ellipse(0,0,6*zoom,3*zoom,0,0,TAU); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.7)';
+      ctx.beginPath(); ctx.ellipse(0,0,3*zoom,1.6*zoom,0,0,TAU); ctx.fill();
+      const blink = Math.sin(f.blinkPhase)>0.5;
+      if(blink){ ctx.fillStyle='rgba(255,60,60,0.9)'; ctx.beginPath(); ctx.arc(5*zoom,0,1,0,TAU); ctx.fill(); }
+    } else if(f.kind==='delivery'){
+      ctx.fillStyle = hslStr(f.hue,70,50,0.95);
+      ctx.fillRect(-3*zoom,-3*zoom,6*zoom,6*zoom);
+      // rotor blur arms
+      ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.lineWidth=1;
+      for(let i=0;i<4;i++){
+        const a = f.rotorPhase + i*Math.PI/2;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*5*zoom, Math.sin(a)*5*zoom); ctx.stroke();
+      }
+    } else if(f.kind==='maintenance' || f.kind==='construction'){
+      ctx.fillStyle = hslStr(f.hue,60,45,0.9);
+      ctx.beginPath(); ctx.arc(0,0,3*zoom,0,TAU); ctx.fill();
+      ctx.strokeStyle='rgba(255,200,80,0.6)';
+      ctx.beginPath(); ctx.arc(0,0,5*zoom,0,TAU); ctx.stroke();
+    } else { // drone
+      ctx.fillStyle = hslStr(f.hue,80,60,0.9);
+      ctx.beginPath(); ctx.arc(0,0,2.2*zoom,0,TAU); ctx.fill();
+      ctx.strokeStyle='rgba(120,220,255,0.4)'; ctx.lineWidth=0.8;
+      for(let i=0;i<4;i++){
+        const a = f.rotorPhase*0.3+i*Math.PI/2;
+        ctx.beginPath(); ctx.moveTo(Math.cos(a)*1*zoom,Math.sin(a)*1*zoom); ctx.lineTo(Math.cos(a)*3.5*zoom, Math.sin(a)*3.5*zoom); ctx.stroke();
+      }
+      const blink = Math.sin(f.blinkPhase)>0.7;
+      if(blink){ ctx.fillStyle='rgba(255,60,60,0.8)'; ctx.beginPath(); ctx.arc(0,0,1,0,TAU); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+
+  _drawWeatherWorldEffects(ctx){
+    // ambient neon glow particles + smoke/steam from vents (world-space) drawn via particle system
+    const items = this.particles.world.active;
+    for(const p of items){
+      const s = this.worldToScreen(p.x,p.y,p.z);
+      this.particles.drawWorldParticle(ctx, p, s.sx, s.sy, this.camera.zoom);
+    }
+  }
+
+  _applyBloom(){
+    const bctx = this.bloomCtx;
+    const bw = this.bloomCanvas.width, bh = this.bloomCanvas.height;
+    bctx.clearRect(0,0,bw,bh);
+    bctx.drawImage(this.canvas, 0,0,this.canvas.width,this.canvas.height, 0,0,bw,bh);
+    try{ bctx.filter = 'blur(3px) brightness(1.35)'; bctx.drawImage(this.bloomCanvas,0,0); bctx.filter='none'; }catch(e){}
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = 'lighter';
+    this.ctx.globalAlpha = 0.35;
+    this.ctx.drawImage(this.bloomCanvas, 0,0,bw,bh, 0,0,this.canvas.width,this.canvas.height);
+    this.ctx.restore();
+  }
+
+  _drawVignette(ctx){
+    ctx.save();
+    ctx.scale(this.dpr,this.dpr);
+    const g = ctx.createRadialGradient(this.w/2,this.h/2, this.h*0.35, this.w/2,this.h/2, this.h*0.75);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(1,'rgba(0,0,0,0.45)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,this.w,this.h);
+    ctx.restore();
+  }
+}
+
+/* ============================== GLOBAL SHARED STATE (read by Renderer) ============================== */
+let uiGlobals = {
+  powerOutageActive: false,
+  powerOutageZone: null,
+};
+
+/* ============================== SAVE MANAGER ============================== */
+class SaveManager{
+  constructor(){ this.key = 'neocity2099_settings_v1'; }
+  load(){
+    try{
+      const raw = localStorage.getItem(this.key);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  save(obj){
+    try{ localStorage.setItem(this.key, JSON.stringify(obj)); }catch(e){}
+  }
+}
+
+/* ============================== UI MANAGER ============================== */
+class UIManager{
+  constructor(engine){
+    this.engine = engine;
+    this.el = {
+      fps: document.getElementById('statFps'),
+      pop: document.getElementById('statPop'),
+      traffic: document.getElementById('statTraffic'),
+      weather: document.getElementById('statWeather'),
+      time: document.getElementById('statTime'),
+      entities: document.getElementById('statEntities'),
+      toast: document.getElementById('event-toast'),
+      settingsPanel: document.getElementById('settings-panel'),
+      loading: document.getElementById('loading'),
+      loadBar: document.getElementById('loadBar'),
+      prodPanel: document.getElementById('prod-panel'),
+      prodToast: document.getElementById('prod-toast'),
+    };
+    this.toastTimer = null;
+    this.prodToastTimer = null;
+    this._bindControls();
+    this._bindProductivityControls();
+  }
+
+  _bindControls(){
+    const eng = this.engine;
+    document.getElementById('btnZoomIn').onclick = ()=>{ eng.audio.uiBlip(920); eng.camera.cinematic=null; eng.camera.zoomAt(1.35, window.innerWidth/2, window.innerHeight/2, window.innerWidth, window.innerHeight); };
+    document.getElementById('btnZoomOut').onclick = ()=>{ eng.audio.uiBlip(700); eng.camera.cinematic=null; eng.camera.zoomAt(1/1.35, window.innerWidth/2, window.innerHeight/2, window.innerWidth, window.innerHeight); };
+    document.getElementById('btnPause').onclick = (e)=>{ eng.togglePause(); e.target.textContent = eng.paused? '▶':'⏸'; eng.audio.uiBlip(600); };
+    document.getElementById('btnSpeed').onclick = (e)=>{ eng.cycleSpeed(); e.target.textContent = eng.speedMult+'×'; eng.audio.uiBlip(800); };
+    document.getElementById('btnEvent').onclick = ()=>{ eng.triggerRandomEvent(); eng.audio.uiBlip(1000); };
+    document.getElementById('btnRecenter').onclick = ()=>{
+      eng.audio.uiBlip(760);
+      eng.camera.cinematic = { fromX:eng.camera.x, fromY:eng.camera.y, fromZoom:eng.camera.zoom, toX:0, toY:0, toZoom:1, t:0, dur:1.2 };
+    };
+    document.getElementById('btnSettings').onclick = ()=>{ this.el.settingsPanel.classList.toggle('open'); this.el.prodPanel.classList.remove('open'); eng.audio.uiBlip(850); };
+    document.getElementById('btnProductivity').onclick = ()=>{ this.el.prodPanel.classList.toggle('open'); this.el.settingsPanel.classList.remove('open'); eng.audio.uiBlip(850); if(this.el.prodPanel.classList.contains('open')) this.updateProductivityPanel(eng.growth); };
+
+    const bindToggle = (id, onChange)=>{
+      const node = document.getElementById(id);
+      node.onclick = ()=>{
+        const on = !node.classList.contains('on');
+        node.classList.toggle('on', on);
+        onChange(on);
+        eng.audio.uiBlip(on?900:600);
+      };
+    };
+    bindToggle('toggleSound', on=>{ eng.audio.setEnabled(on); eng.settings.sound=on; eng.persistSettings(); });
+    bindToggle('toggleBloom', on=>{ eng.renderer.bloomEnabled=on; eng.settings.bloom=on; eng.persistSettings(); });
+    bindToggle('toggleSplash', on=>{ eng.renderer.splashEnabled=on; eng.settings.splash=on; eng.persistSettings(); });
+    bindToggle('toggleAutoWeather', on=>{ eng.weather.auto=on; eng.settings.autoWeather=on; eng.persistSettings(); });
+    bindToggle('toggleAutoEvents', on=>{ eng.autoEvents=on; eng.settings.autoEvents=on; eng.persistSettings(); });
+
+    document.getElementById('densitySlider').oninput = (e)=>{
+      const v = parseFloat(e.target.value);
+      eng.traffic.setDensity(v); eng.settings.density=v; eng.persistSettings();
+    };
+
+    document.getElementById('weatherSelect').onchange = (e)=>{
+      const v = e.target.value;
+      if(v==='auto'){ eng.weather.auto=true; }
+      else{ eng.weather.setWeather(v, false); }
+      eng.audio.uiBlip(850);
+    };
+    document.getElementById('speedSelect').onchange = (e)=>{
+      const v = e.target.value;
+      const map = {0:'auto',1:'morning',2:'afternoon',3:'sunset',4:'night',5:'midnight'};
+      eng.lighting.setPhase(map[v]);
+      eng.audio.uiBlip(850);
+    };
+  }
+
+  _bindProductivityControls(){
+    const eng = this.engine;
+    const growthOf = ()=>eng.growth;
+
+    document.getElementById('prodClose').onclick = ()=>{ this.el.prodPanel.classList.remove('open'); eng.audio.uiBlip(600); };
+
+    // ---- Tasks ----
+    const inputRow = document.getElementById('ppTaskInputRow');
+    const input = document.getElementById('ppTaskInput');
+    document.getElementById('ppTaskAddToggle').onclick = ()=>{
+      const show = inputRow.style.display==='none';
+      inputRow.style.display = show ? 'flex' : 'none';
+      if(show) input.focus();
+      eng.audio.uiBlip(800);
+    };
+    const submitTask = ()=>{
+      const v = input.value;
+      if(v && v.trim()){ growthOf().addTask(v); input.value=''; eng.audio.uiBlip(950); }
+    };
+    document.getElementById('ppTaskAddBtn').onclick = submitTask;
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter') submitTask(); });
+
+    document.getElementById('prod-task-list').addEventListener('click', e=>{
+      const row = e.target.closest('.pp-task');
+      if(!row) return;
+      const id = row.dataset.id;
+      if(e.target.classList.contains('pp-del')){
+        growthOf().deleteTask(id); eng.audio.uiBlip(550);
+      } else if(e.target.classList.contains('pp-check') || e.target.classList.contains('pp-txt')){
+        growthOf().toggleTask(id);
+      }
+    });
+
+    // ---- Focus timer ----
+    document.getElementById('ppTimerPresets').addEventListener('click', e=>{
+      const span = e.target.closest('span[data-min]');
+      if(!span) return;
+      document.querySelectorAll('#ppTimerPresets span').forEach(s=>s.classList.remove('active'));
+      span.classList.add('active');
+      const g = growthOf();
+      if(!g.timer.running){
+        g.timer.presetMin = parseInt(span.dataset.min,10);
+        g.timer.totalSec = g.timer.presetMin*60;
+        g.timer.remainingSec = g.timer.totalSec;
+        g.save(); this.updateProductivityPanel(g);
+      }
+    });
+    document.getElementById('ppTimerStart').onclick = ()=>{
+      const active = document.querySelector('#ppTimerPresets span.active');
+      growthOf().startTimer(active? parseInt(active.dataset.min,10) : 25);
+    };
+    document.getElementById('ppTimerPause').onclick = ()=> growthOf().pauseTimer();
+    document.getElementById('ppTimerResume').onclick = ()=> growthOf().resumeTimer();
+    document.getElementById('ppTimerReset').onclick = ()=> growthOf().resetTimer();
+  }
+
+  updateProductivityPanel(growth){
+    if(!growth) return;
+
+    // Level / XP
+    document.getElementById('ppLevel').textContent = growth.level;
+    const need = growth._xpForLevel(growth.level);
+    document.getElementById('ppXpText').textContent = `${Math.floor(growth.xp)} / ${need} XP`;
+    document.getElementById('ppXpFill').style.width = clamp((growth.xp/need)*100,0,100)+'%';
+    document.getElementById('ppNextUnlock').textContent = `Next Unlock: ${growth.nextUnlockLabel()}`;
+
+    // Stats grid
+    const counts = growth.buildingCounts();
+    document.getElementById('ppProd').textContent = growth.productivityPct()+'%';
+    document.getElementById('ppStreak').textContent = growth.streak + (growth.streak===1?' day':' days');
+    document.getElementById('ppFocusToday').textContent = Math.round(growth.focusSecondsToday/60)+'m';
+    document.getElementById('ppBuildingsUp').textContent = counts.up;
+    document.getElementById('ppBuildingsDown').textContent = counts.down;
+    document.getElementById('ppVitality').textContent = Math.round(growth.cityVitality*100)+'%';
+
+    // Tasks
+    const list = document.getElementById('prod-task-list');
+    if(!growth.tasks.length){
+      list.innerHTML = '<div class="pp-empty">No tasks yet — add one above.</div>';
+    } else {
+      list.innerHTML = growth.tasks.slice(0,60).map(t=>`
+        <div class="pp-task${t.done?' done':''}" data-id="${t.id}">
+          <div class="pp-check">${t.done?'✓':''}</div>
+          <div class="pp-txt">${this._esc(t.text)}</div>
+          <div class="pp-del">✕</div>
+        </div>`).join('');
+    }
+
+    // Timer
+    const t = growth.timer;
+    const mm = Math.floor(Math.max(0,t.remainingSec)/60).toString().padStart(2,'0');
+    const ss = Math.floor(Math.max(0,t.remainingSec)%60).toString().padStart(2,'0');
+    document.getElementById('ppTimerDisplay').textContent = `${mm}:${ss}`;
+    const label = document.getElementById('ppTimerLabel');
+    label.textContent = !t.running ? 'Ready to focus' : (t.paused ? 'Paused' : 'Focusing…');
+
+    const bStart = document.getElementById('ppTimerStart'), bPause = document.getElementById('ppTimerPause'),
+          bResume = document.getElementById('ppTimerResume'), bReset = document.getElementById('ppTimerReset');
+    bStart.style.display = t.running ? 'none' : 'inline-block';
+    bPause.style.display = (t.running && !t.paused) ? 'inline-block' : 'none';
+    bResume.style.display = (t.running && t.paused) ? 'inline-block' : 'none';
+    bReset.style.display = t.running ? 'inline-block' : 'none';
+
+    // History
+    const hist = document.getElementById('prod-history');
+    if(!growth.completionHistory.length){
+      hist.innerHTML = '<div class="pp-empty">Nothing completed yet.</div>';
+    } else {
+      hist.innerHTML = growth.completionHistory.slice(0,12).map(h=>`
+        <div class="pp-hist-item"><span class="h-label">${this._esc(h.label)}</span><span class="h-xp">+${h.xp}</span></div>
+      `).join('');
+    }
+  }
+
+  celebrateCompletion(title, sub, building){
+    const el = this.el.prodToast;
+    document.getElementById('ptMain').textContent = title;
+    document.getElementById('ptSub').textContent = sub + (building? ' · City Growing' : '');
+    el.classList.add('show');
+    clearTimeout(this.prodToastTimer);
+    this.prodToastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+  }
+
+  _esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  showToast(msg){
+    const el = this.el.toast;
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(()=>el.classList.remove('show'), 3600);
+  }
+
+  setLoadProgress(p){ this.el.loadBar.style.width = (p*100)+'%'; }
+  hideLoading(){
+    this.el.loading.classList.add('hide');
+    setTimeout(()=>{ this.el.loading.style.display='none'; }, 850);
+  }
+
+  update(stats){
+    this.el.fps.textContent = stats.fps.toFixed(0);
+    this.el.fps.className = 'val' + (stats.fps<35?' warn':'');
+    this.el.pop.textContent = stats.population.toLocaleString();
+    this.el.traffic.textContent = stats.trafficLabel;
+    this.el.traffic.className = 'val' + (stats.trafficLoad>0.6?' warn':'');
+    this.el.weather.textContent = stats.weatherLabel;
+    this.el.time.textContent = stats.timeLabel;
+    this.el.entities.textContent = stats.entities;
+  }
+}
+
+/* ============================== CITY GROWTH / PRODUCTIVITY SYSTEM ============================== */
+const UNLOCK_NAMES = [
+  'Mega Towers','Sky Bridges','Drone Stations','Monorail Network','Floating Platforms',
+  'Cyber Parks','Space Elevator','Advanced Neon Districts','Futuristic Landmarks'
+];
+
+class CityGrowthSystem{
+  constructor(engine){
+    this.engine = engine;
+    this.city = engine.city;
+    this.key = 'neocity2099_progress_v1';
+
+    this.tasks = [];
+    this.xp = 0;
+    this.level = 1;
+    this.streak = 0;
+    this.lastActiveDay = null;
+    this.lastActiveTime = Date.now();
+    this.completionHistory = [];
+    this.focusSecondsToday = 0;
+    this.focusDay = null;
+    this.growthPointer = 0;
+    this.buildingTiers = {};
+    this.cityVitality = 1;
+    this._vitalityTarget = 1;
+    this._uiThrottle = 0;
+    this._saveThrottle = 0;
+
+    // Timer is timestamp-based: `endAt` is the absolute ms-epoch the running timer will
+    // finish at. Remaining time is always derived from (endAt - Date.now()), never from
+    // accumulating per-frame deltas, so it survives tab throttling, sleep, refresh, or the
+    // site being closed entirely. `remainingSec` is the authoritative value only while
+    // paused/stopped (when there is no endAt to derive from).
+    this.timer = { running:false, paused:false, totalSec:25*60, remainingSec:25*60, presetMin:25, endAt:null };
+
+    this._load();
+    this._applyTiersToCity(true);   // restore saved growth instantly, no replay animation on boot
+    this._registerBoot();
+    this._resolveTimerOnLoad();     // catch up / auto-complete a timer that finished while away
+    this._bindLifecycleHandlers();  // keep persistence correct across tab hide, lock, close
+  }
+
+  /* ---------------- persistence ---------------- */
+  _load(){
+    let raw = null;
+    try{ raw = JSON.parse(localStorage.getItem(this.key) || 'null'); }catch(e){ raw = null; }
+    if(!raw) return;
+    this.tasks = Array.isArray(raw.tasks) ? raw.tasks : [];
+    this.xp = raw.xp||0;
+    this.level = raw.level||1;
+    this.streak = raw.streak||0;
+    this.lastActiveDay = raw.lastActiveDay||null;
+    this.lastActiveTime = raw.lastActiveTime||Date.now();
+    this.completionHistory = Array.isArray(raw.completionHistory) ? raw.completionHistory : [];
+    this.focusSecondsToday = raw.focusSecondsToday||0;
+    this.focusDay = raw.focusDay||null;
+    this.growthPointer = raw.growthPointer||0;
+    this.buildingTiers = raw.buildingTiers||{};
+    this.cityVitality = raw.cityVitality!==undefined ? raw.cityVitality : 1;
+    if(raw.timer) this.timer = Object.assign(this.timer, raw.timer);
+    // Note: we no longer force a running timer into a paused state on load. Instead the
+    // saved `endAt` timestamp is compared against Date.now() in _resolveTimerOnLoad() so the
+    // timer keeps counting down (or auto-completes) exactly as if it had run the whole time.
+  }
+  save(){
+    try{
+      localStorage.setItem(this.key, JSON.stringify({
+        tasks:this.tasks, xp:this.xp, level:this.level, streak:this.streak,
+        lastActiveDay:this.lastActiveDay, lastActiveTime:this.lastActiveTime,
+        completionHistory:this.completionHistory.slice(0,30),
+        focusSecondsToday:this.focusSecondsToday, focusDay:this.focusDay,
+        growthPointer:this.growthPointer, buildingTiers:this.buildingTiers,
+        cityVitality:this.cityVitality, timer:this.timer
+      }));
+    }catch(e){}
+  }
+  _registerBoot(){
+    // Recompute today's focus counter reset if a new day started since last visit.
+    const today = this._todayStr();
+    if(this.focusDay !== today){ this.focusDay = today; this.focusSecondsToday = 0; }
+  }
+
+  /* ---------------- timer persistence: boot resolution + lifecycle ---------------- */
+  _resolveTimerOnLoad(){
+    const t = this.timer;
+    if(t.running && !t.paused && t.endAt){
+      const now = Date.now();
+      if(now >= t.endAt){
+        // Timer's end time has already passed — it "finished" while the site was closed,
+        // refreshed, or backgrounded. Complete it instantly: award XP, grow the city,
+        // update the streak, persist, and show the completion notification.
+        t.remainingSec = 0;
+        this._completeFocusSession();
+      } else {
+        // Still running — resume showing the correct remaining time, derived purely from
+        // the saved end timestamp rather than any elapsed-frame bookkeeping.
+        t.remainingSec = (t.endAt - now) / 1000;
+      }
+    } else if(t.running && t.paused){
+      // Paused timers keep whatever remainingSec was last saved — nothing to derive.
+    }
+    this.save(); this.refreshUI();
+  }
+
+  _bindLifecycleHandlers(){
+    // Re-derive remaining time (and catch a during-background completion) the instant the
+    // tab becomes visible again, rather than waiting for the next animation frame — this
+    // matters most after the phone was locked or the tab was backgrounded for a long time.
+    document.addEventListener('visibilitychange', ()=>{
+      if(!document.hidden) this._resolveTimerOnLoad();
+    });
+    // pageshow fires on bfcache restores (e.g. mobile back/forward, some lock/unlock flows)
+    // which visibilitychange can miss.
+    window.addEventListener('pageshow', (e)=>{ if(e.persisted) this._resolveTimerOnLoad(); });
+    // Best-effort final save on the way out — belt-and-suspenders alongside the periodic
+    // save throttle, since mobile browsers don't reliably fire 'beforeunload'.
+    const flush = ()=> this.save();
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+  }
+
+  /* ---------------- time / streak helpers ---------------- */
+  _todayStr(){ const d=new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+  _registerActivity(){
+    const today = this._todayStr();
+    if(this.lastActiveDay !== today){
+      const y = new Date(Date.now()-86400000);
+      const yStr = `${y.getFullYear()}-${y.getMonth()+1}-${y.getDate()}`;
+      this.streak = (this.lastActiveDay===yStr) ? this.streak+1 : 1;
+      this.lastActiveDay = today;
+    }
+    this.lastActiveTime = Date.now();
+  }
+
+  /* ---------------- tasks ---------------- */
+  addTask(text){
+    text = (text||'').trim();
+    if(!text) return;
+    this.tasks.unshift({id:'t'+Date.now().toString(36)+Math.floor(Math.random()*9999), text, done:false, createdAt:Date.now()});
+    this.save(); this.refreshUI();
+  }
+  editTask(id, text){
+    text = (text||'').trim();
+    const t = this.tasks.find(t=>t.id===id);
+    if(!t || !text) return;
+    t.text = text;
+    this.save(); this.refreshUI();
+  }
+  deleteTask(id){
+    this.tasks = this.tasks.filter(t=>t.id!==id);
+    this.save(); this.refreshUI();
+  }
+  toggleTask(id){
+    const t = this.tasks.find(t=>t.id===id);
+    if(!t) return;
+    t.done = !t.done;
+    if(t.done){
+      t.completedAt = Date.now();
+      this._registerActivity();
+      const xp = 15;
+      this._grantXP(xp, `Task · ${t.text}`);
+      const built = this.growCity();
+      this.engine.ui.celebrateCompletion('Task Complete', `+${xp} XP`, built);
+      this.engine.audio.uiBlip(980);
+    } else {
+      t.completedAt = null;
+    }
+    this.save(); this.refreshUI();
+  }
+
+  /* ---------------- focus timer ---------------- */
+  startTimer(minutes){
+    minutes = clamp(minutes||25, 1, 240);
+    this.timer.totalSec = minutes*60;
+    this.timer.remainingSec = minutes*60;
+    this.timer.presetMin = minutes;
+    this.timer.running = true;
+    this.timer.paused = false;
+    this.timer.endAt = Date.now() + minutes*60*1000;   // authoritative completion timestamp
+    this.engine.audio.uiBlip(900);
+    this.save(); this.refreshUI();
+  }
+  pauseTimer(){
+    if(!this.timer.running || this.timer.paused) return;
+    // Freeze remainingSec from the end timestamp, then drop endAt — while paused there is
+    // no "running clock" to derive time from.
+    this.timer.remainingSec = Math.max(0, (this.timer.endAt - Date.now()) / 1000);
+    this.timer.paused = true;
+    this.timer.endAt = null;
+    this.engine.audio.uiBlip(650);
+    this.save(); this.refreshUI();
+  }
+  resumeTimer(){
+    if(!this.timer.running || !this.timer.paused) return;
+    // Re-anchor the end timestamp to now + whatever time was left.
+    this.timer.endAt = Date.now() + this.timer.remainingSec*1000;
+    this.timer.paused = false;
+    this.engine.audio.uiBlip(900);
+    this.save(); this.refreshUI();
+  }
+  resetTimer(){
+    this.timer.running = false; this.timer.paused = false;
+    this.timer.remainingSec = this.timer.totalSec;
+    this.timer.endAt = null;
+    this.engine.audio.uiBlip(600);
+    this.save(); this.refreshUI();
+  }
+  _completeFocusSession(){
+    this.timer.running = false; this.timer.paused = false;
+    this.timer.endAt = null;
+    this._registerActivity();
+    const minutes = Math.max(1, Math.round(this.timer.totalSec/60));
+    const today = this._todayStr();
+    if(this.focusDay !== today){ this.focusDay = today; this.focusSecondsToday = 0; }
+    this.focusSecondsToday += this.timer.totalSec;
+    const xp = 25 + Math.min(35, minutes);
+    this._grantXP(xp, `Focus Session · ${minutes}m`);
+    const built = this.growCity();
+    this.engine.ui.celebrateCompletion('Focus Session Complete', `+${xp} XP`, built);
+    this.engine.audio.uiBlip(1050);
+    this.timer.remainingSec = this.timer.totalSec;
+    this.save(); this.refreshUI();
+  }
+
+  /* ---------------- XP / levels ---------------- */
+  _xpForLevel(level){ return 100 + (level-1)*70; }
+  _grantXP(amount, label){
+    this.xp += amount;
+    this.completionHistory.unshift({ts:Date.now(), label, xp:amount});
+    this.completionHistory = this.completionHistory.slice(0,30);
+    let leveled = false;
+    while(this.xp >= this._xpForLevel(this.level)){
+      this.xp -= this._xpForLevel(this.level);
+      this.level++;
+      leveled = true;
+    }
+    if(leveled) this._onLevelUp();
+  }
+  _onLevelUp(){
+    this.engine.ui.showToast(`⬆ City Level ${this.level} Reached`);
+    this.engine.camera.shake(0.6, 0.5);
+    const plazas = this.city.plazas;
+    if(plazas.length) plazas[this.level % plazas.length].hasHologram = true; // "more holograms" unlock
+  }
+  maxTier(){ return clamp(3 + Math.floor(this.level/2), 3, 9); }
+  nextUnlockLabel(){
+    const idx = this.level % UNLOCK_NAMES.length;
+    return `${UNLOCK_NAMES[idx]} (Lv ${this.level+1})`;
+  }
+
+  /* ---------------- cinematic city growth ---------------- */
+  growCity(){
+    const order = this.city.growthOrder;
+    if(!order || !order.length) return null;
+    const maxTier = this.maxTier();
+    let idx = -1, tries = 0;
+    while(tries < order.length){
+      const cand = order[this.growthPointer % order.length];
+      this.growthPointer++;
+      tries++;
+      if(this.city.buildings[cand].tier < maxTier){ idx = cand; break; }
+    }
+    if(idx === -1) return null; // every lot already maxed at the current level cap
+    const b = this.city.buildings[idx];
+    b.tier++;
+    this.buildingTiers[idx] = b.tier;
+    this._applyTierVisuals(b);
+    b.constructionFrom = b.displayHeight;
+    b.constructionT = 0;
+    b.constructionDur = randRange(Math.random, 3.4, 4.8);
+    b.constructing = true;
+    return b;
+  }
+  _applyTierVisuals(b){
+    b.targetHeight = b.baseHeight * (1 + b.tier*0.32);
+    b.matVal = clamp(b.baseMatVal + b.tier*1.5, 10, 52);
+    if(b.tier>=2) b.hasBillboardWall = true;
+    if(b.tier>=3) b.hasElevatorGlass = true;
+    if(b.tier>=4) b.roofType = 'spire';
+  }
+  _applyTiersToCity(instant){
+    for(const key in this.buildingTiers){
+      const idx = parseInt(key,10);
+      const b = this.city.buildings[idx];
+      if(!b) continue;
+      b.tier = this.buildingTiers[idx];
+      this._applyTierVisuals(b);
+      if(instant){ b.displayHeight = b.targetHeight; b.constructing = false; }
+    }
+  }
+
+  /* ---------------- decay / abandonment ---------------- */
+  _updateDecay(dt){
+    const idleMin = (Date.now()-this.lastActiveTime)/60000;
+    const graceMin = 25, decayFullMin = 8*60;
+    let target;
+    if(idleMin <= graceMin) target = 1;
+    else {
+      const t = clamp((idleMin-graceMin)/(decayFullMin-graceMin), 0, 1);
+      target = lerp(1, 0.12, smoothstep(0,1,t));
+    }
+    this._vitalityTarget = target;
+    this.cityVitality = lerp(this.cityVitality, target, 1-Math.pow(0.917, dt)); // ~8s half-life, genuinely slow drift
+
+    for(const b of this.city.buildings){
+      const abTarget = this.cityVitality < b.decayThreshold ? 1 : 0;
+      b.abandonVisual = lerp(b.abandonVisual, abTarget, 1-Math.pow(0.758, dt)); // ~2.5s half-life per lot
+      if(b.abandonVisual > 0.55 && Math.random() < dt*0.06){
+        this.engine.particles.spawnWorld('smoke', b.cx+randRange(Math.random,-0.3,0.3), b.cy+randRange(Math.random,-0.3,0.3), b.displayHeight+1.5,
+          {size:5,maxLife:3.2,growth:5.5,alpha:0.28});
+      }
+    }
+  }
+
+  /* ---------------- construction animation ---------------- */
+  _updateConstruction(dt){
+    for(const b of this.city.buildings){
+      if(b.constructing){
+        b.constructionT += dt;
+        const t = clamp(b.constructionT/b.constructionDur, 0, 1);
+        b.displayHeight = lerp(b.constructionFrom, b.targetHeight, Easing.backOut(t));
+        if(t>=1){
+          b.constructing = false;
+          b.displayHeight = b.targetHeight;
+          this.engine.particles.spawnWorld('glow', b.cx,b.cy,b.targetHeight+2, {hue:190,maxLife:1.3,size:11,growth:7,alpha:0.6});
+          for(let i=0;i<12;i++){
+            this.engine.particles.spawnWorld('sparkle', b.cx+randRange(Math.random,-0.4,0.4), b.cy+randRange(Math.random,-0.4,0.4), b.targetHeight,
+              {hue:45,maxLife:1.1,size:3,flicker:true,vz:randRange(Math.random,4,11)});
+          }
+        }
+      } else if(Math.abs(b.displayHeight-b.targetHeight) > 0.005){
+        b.displayHeight = lerp(b.displayHeight, b.targetHeight, 1-Math.pow(0.001, dt));
+      }
+    }
+  }
+
+  /* ---------------- derived stats for dashboard ---------------- */
+  productivityPct(){
+    const total = this.city.buildings.length;
+    if(!total) return 100;
+    let thriving = 0;
+    for(const b of this.city.buildings) if(b.abandonVisual < 0.5) thriving++;
+    return Math.round((thriving/total)*100);
+  }
+  buildingCounts(){
+    let up=0, down=0;
+    for(const b of this.city.buildings){ if(b.abandonVisual>=0.5) down++; else up++; }
+    return {up, down};
+  }
+
+  /* ---------------- per-frame tick ---------------- */
+  update(dt){
+    if(this.timer.running && !this.timer.paused){
+      // Derive remaining time from the absolute end timestamp every frame, rather than
+      // subtracting per-frame dt. This makes the displayed countdown immune to rAF
+      // throttling/drift (backgrounded tabs, laptop sleep, slow frames) — it always
+      // reflects real wall-clock time.
+      this.timer.remainingSec = this.timer.endAt ? (this.timer.endAt - Date.now()) / 1000 : this.timer.remainingSec - dt;
+      if(this.timer.remainingSec <= 0){
+        this.timer.remainingSec = 0;
+        this._completeFocusSession();
+      }
+    }
+    this._updateDecay(dt);
+    this._updateConstruction(dt);
+    this.engine.renderer.vitality = this.cityVitality;
+
+    this._uiThrottle -= dt;
+    if(this._uiThrottle <= 0){ this._uiThrottle = 0.25; this.refreshUI(); }
+
+    this._saveThrottle -= dt;
+    if(this._saveThrottle <= 0){ this._saveThrottle = 4; this.save(); }
+  }
+
+  refreshUI(){ this.engine.ui.updateProductivityPanel(this); }
+}
+
+/* ============================== ENGINE ============================== */
+class Engine{
+  constructor(){
+    this.canvas = document.getElementById('stage');
+    this.save = new SaveManager();
+    this.settings = Object.assign({
+      sound:true, bloom:true, splash:true, autoWeather:true, autoEvents:true, density:1
+    }, this.save.load()||{});
+
+    this.city = new City(20990917);
+    this.camera = new Camera();
+    this.audio = new AudioEngine();
+    this.particles = new ParticleSystem();
+    this.weather = new WeatherEngine(this.particles, this.audio);
+    this.lighting = new LightingEngine();
+    this.traffic = new TrafficSystem(this.city, this.audio);
+    this.traffic.setDensity(this.settings.density);
+    this.weather.auto = this.settings.autoWeather;
+
+    this.renderer = new Renderer(this.canvas, this.city, this.camera, this.particles, this.weather, this.lighting, this.traffic);
+    this.renderer.bloomEnabled = this.settings.bloom;
+    this.renderer.splashEnabled = this.settings.splash;
+
+    const fitZoom = clamp( Math.min(window.innerWidth, window.innerHeight) / (this.city.citySpan*ISO.tileW*1.55), 0.22, 1.1);
+    this.camera.zoom = this.camera.tzoom = fitZoom;
+    this.camera.minZoom = Math.min(0.16, fitZoom*0.5);
+
+    this.input = new InputManager(this.canvas, this.camera, ()=>{ this.audio.start(); });
+    this.ui = new UIManager(this);
+    this.growth = new CityGrowthSystem(this);
+    this.renderer.vitality = this.growth.cityVitality;
+    this.growth.refreshUI();
+
+    this.paused = false;
+    this.speedMult = 1;
+    this.autoEvents = this.settings.autoEvents;
+    this.eventTimer = randRange(Math.random, 14, 24);
+
+    this._applySettingsToDOM();
+
+    this.lastT = performance.now();
+    this.fps = 60;
+    this.fpsSmoothed = 60;
+
+    window.addEventListener('resize', ()=>this.renderer.resize());
+
+    this._loop = this._loop.bind(this);
+    requestAnimationFrame(this._loop);
+  }
+
+  _applySettingsToDOM(){
+    const setToggle = (id,val)=> document.getElementById(id).classList.toggle('on', !!val);
+    setToggle('toggleSound', this.settings.sound);
+    setToggle('toggleBloom', this.settings.bloom);
+    setToggle('toggleSplash', this.settings.splash);
+    setToggle('toggleAutoWeather', this.settings.autoWeather);
+    setToggle('toggleAutoEvents', this.settings.autoEvents);
+    document.getElementById('densitySlider').value = this.settings.density;
+    this.audio.setEnabled(this.settings.sound);
+  }
+
+  persistSettings(){ this.save.save(this.settings); }
+
+  togglePause(){ this.paused = !this.paused; }
+  cycleSpeed(){
+    const seq = [1,2,4,0.5];
+    const idx = seq.indexOf(this.speedMult);
+    this.speedMult = seq[(idx+1)%seq.length];
+  }
+
+  triggerRandomEvent(){
+    const events = ['policeChase','fireResponse','droneDelivery','concert','fireworks','meteorShower','powerOutage','emergencyAlert'];
+    const kind = pick(Math.random, events);
+    this._fireEvent(kind);
+  }
+
+  _fireEvent(kind){
+    const span = this.city.citySpan;
+    switch(kind){
+      case 'policeChase': {
+        const suspect = this.traffic._spawnCar('car');
+        suspect.maxSpeed *= 1.6;
+        const cop = this.traffic.triggerEmergency('police');
+        cop.laneAxis = suspect.laneAxis; cop.lineCoord = suspect.lineCoord; cop.dir = suspect.dir;
+        cop.pos = suspect.pos - suspect.dir*2;
+        cop.maxSpeed = suspect.maxSpeed*1.05;
+        this.ui.showToast('⚡ Police Pursuit In Progress');
+        this.camera.shake(1.5, 1.2);
+        break;
+      }
+      case 'fireResponse': {
+        const b = pick(Math.random, this.city.buildings);
+        for(let i=0;i<3;i++){
+          this.particles.spawnWorld('fire', b.cx+randRange(Math.random,-0.3,0.3), b.cy+randRange(Math.random,-0.3,0.3), b.height, {size:6,maxLife:1.6,growth:2});
+        }
+        this.particles.spawnWorld('smoke', b.cx, b.cy, b.height+2, {size:8,maxLife:3.5,growth:9,alpha:0.4});
+        this.traffic.triggerEmergency('firetruck');
+        this.ui.showToast('🔥 Fire Emergency Reported Downtown');
+        break;
+      }
+      case 'droneDelivery': {
+        this.traffic.triggerDeliveryDrone();
+        this.ui.showToast('📦 Drone Delivery En Route');
+        break;
+      }
+      case 'concert': {
+        const pl = pick(Math.random, this.city.plazas.length?this.city.plazas:this.city.parks);
+        if(pl){
+          for(let i=0;i<40;i++){
+            this.particles.spawnWorld('sparkle', pl.cx+randRange(Math.random,-1,1), pl.cy+randRange(Math.random,-1,1), randRange(Math.random,1,6),
+              {hue:randRange(Math.random,0,360), maxLife:2, size:3, flicker:true, vz:randRange(Math.random,2,6)});
+          }
+        }
+        this.ui.showToast('🎵 Live Concert Downtown');
+        break;
+      }
+      case 'fireworks': {
+        for(let burst=0; burst<5; burst++){
+          const bx = randRange(Math.random,-span*0.6,span*0.6);
+          const by = randRange(Math.random,-span*0.6,span*0.6);
+          const bz = randRange(Math.random,40,75);
+          const hue = randRange(Math.random,0,360);
+          setTimeout(()=>{
+            for(let i=0;i<45;i++){
+              const ang = Math.random()*TAU, spd = randRange(Math.random,3,9);
+              this.particles.spawnWorld('firework', bx,by,bz, {
+                vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd, vz: randRange(Math.random,-3,3),
+                hue: hue+randRange(Math.random,-20,20), maxLife:1.4, size:3, growth:-1
+              });
+            }
+          }, burst*450);
+        }
+        this.ui.showToast('🎆 Fireworks Display');
+        break;
+      }
+      case 'meteorShower': {
+        for(let i=0;i<18;i++){
+          setTimeout(()=>{
+            const mx = randRange(Math.random,-span,span);
+            const my = randRange(Math.random,-span,span);
+            this.particles.spawnWorld('sparkle', mx,my, 90, {
+              vx:randRange(Math.random,-4,-2), vy:randRange(Math.random,-4,-2), vz:-40,
+              hue:200, maxLife:1.1, size:2.5, flicker:true
+            });
+          }, i*140);
+        }
+        this.ui.showToast('☄ Meteor Shower Overhead');
+        break;
+      }
+      case 'powerOutage': {
+        uiGlobals.powerOutageActive = true;
+        uiGlobals.powerOutageZone = { x: randRange(Math.random,-span*0.5,span*0.5), y: randRange(Math.random,-span*0.5,span*0.5), r: randRange(Math.random,4,7) };
+        this.ui.showToast('⚠ Power Outage — District Offline');
+        setTimeout(()=>{ uiGlobals.powerOutageActive=false; }, 9000);
+        break;
+      }
+      case 'emergencyAlert': {
+        this.audio.siren(2.0);
+        this.ui.showToast('📡 Emergency Broadcast Alert Issued');
+        break;
+      }
+    }
+  }
+
+  _spawnAmbientParticles(dt){
+    // rooftop steam vents & chimney smoke on some buildings, subtle and continuous
+    this._ventTimer = (this._ventTimer||0) - dt;
+    if(this._ventTimer<=0){
+      this._ventTimer = 0.4;
+      const b = this.city.buildings[Math.floor(Math.random()*this.city.buildings.length)];
+      if(b && b.hasAC && Math.random()<0.5){
+        this.particles.spawnWorld('steam', b.cx+0.3, b.cy+0.2, b.height+1, {size:2.5,maxLife:2.2,growth:3.5,alpha:0.3});
+      }
+    }
+  }
+
+  _loop(now){
+    let dtReal = (now - this.lastT)/1000;
+    this.lastT = now;
+    dtReal = Math.min(dtReal, 0.08);
+    this.fps = 1/Math.max(dtReal,0.0001);
+    this.fpsSmoothed = lerp(this.fpsSmoothed, this.fps, 0.08);
+
+    const dt = this.paused ? 0 : dtReal*this.speedMult;
+
+    if(!this.paused){
+      this.camera.update(dtReal);
+      this.lighting.update(dt);
+      this.weather.update(dt, window.innerWidth, window.innerHeight);
+      this.traffic.update(dt);
+      this.particles.update(dtReal, this.weather.windSpeed);
+      this._spawnAmbientParticles(dt);
+
+      if(this.autoEvents){
+        this.eventTimer -= dtReal;
+        if(this.eventTimer<=0){
+          this.eventTimer = randRange(Math.random, 22, 42);
+          this._fireEvent(pick(Math.random, ['policeChase','fireResponse','droneDelivery','concert','fireworks','meteorShower','powerOutage','emergencyAlert']));
+        }
+      }
+    } else {
+      this.camera.update(dtReal);
+    }
+
+    // Productivity/city-growth ticks on real elapsed time (task timers, decay, construction
+    // animation) regardless of whether the ambient city simulation itself is paused.
+    this.growth.update(dtReal);
+
+    this.renderer.render(dtReal);
+
+    const population = Math.round(this.city.buildings.reduce((s,b)=>s+b.floors*randIntStable(b),0)/1 + this.traffic.peds.active.length*140);
+    this.ui.update({
+      fps: this.fpsSmoothed,
+      population,
+      trafficLabel: this.traffic.trafficLoad>0.65?'Heavy': this.traffic.trafficLoad>0.35?'Moderate':'Normal',
+      trafficLoad: this.traffic.trafficLoad,
+      weatherLabel: this.weather.label(),
+      timeLabel: this.lighting.timeLabel(),
+      entities: this.traffic.cars.active.length + this.traffic.peds.active.length + this.traffic.flyers.active.length + this.city.buildings.length
+    });
+
+    requestAnimationFrame(this._loop);
+  }
+}
+function randIntStable(b){ return 18 + (b.winSeed % 40); }
+
+/* ============================== BOOTSTRAP ============================== */
+window.addEventListener('DOMContentLoaded', ()=>{
+  const ui = { loadBar: document.getElementById('loadBar'), loading: document.getElementById('loading') };
+  let progress = 0;
+  const tick = setInterval(()=>{
+    progress += randRange(Math.random,0.08,0.22);
+    ui.loadBar.style.width = Math.min(100, progress*100)+'%';
+    if(progress>=1){
+      clearInterval(tick);
+      const engine = new Engine();
+      setTimeout(()=>{
+        ui.loading.classList.add('hide');
+        setTimeout(()=>{ ui.loading.style.display='none'; }, 850);
+      }, 200);
+      window.__NEOCITY_ENGINE__ = engine;
+    }
+  }, 90);
+});
+</script>
+</body>
+</html>
